@@ -188,7 +188,7 @@ function runAudit(){
 }
 
 function clearAuditTabs(){
-  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes'].forEach(id=>{
+  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes','deepRes'].forEach(id=>{
     const el=$(id);if(el)el.innerHTML=id.endsWith('Res')?'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div>':'';
   });
   $('exportBar').style.display='none';
@@ -228,6 +228,7 @@ function renderFullAudit(a,t){
   renderJSONLDTab(a.jsonld,t.jsonld,ld);
   renderSectionsTab(a.sections,t.sections,sec);
   renderMediaTab(a.media,t.media,med);
+  renderDeepDiff(a,t);
   toast('감사 완료 — Critical '+crit+'건');
 }
 
@@ -457,6 +458,136 @@ function renderMediaTab(a,t){
   });
   html+='</div>';
   $('mediaRes').innerHTML=html;
+}
+
+// ═══════════════════════ Deep Diff (2차) ═══════════════════════
+
+// ─── Word-level diff (Myers-like, simplified) ───
+function wordDiff(oldStr,newStr){
+  if(!oldStr&&!newStr) return[];
+  if(!oldStr) return(newStr||'').split(/(\s+)/).map(w=>({type:'add',val:w}));
+  if(!newStr) return(oldStr||'').split(/(\s+)/).map(w=>({type:'del',val:w}));
+  const a=oldStr.split(/(\s+)/),b=newStr.split(/(\s+)/);
+  // LCS-based diff
+  const m=a.length,n=b.length;
+  // For performance, limit to 200 tokens each
+  if(m>200||n>200) return[{type:'del',val:oldStr.substring(0,300)+'…'},{type:'add',val:newStr.substring(0,300)+'…'}];
+  const dp=Array.from({length:m+1},()=>new Uint16Array(n+1));
+  for(let i=1;i<=m;i++) for(let j=1;j<=n;j++) dp[i][j]=a[i-1]===b[j-1]?dp[i-1][j-1]+1:Math.max(dp[i-1][j],dp[i][j-1]);
+  const result=[];let i=m,j=n;
+  while(i>0||j>0){
+    if(i>0&&j>0&&a[i-1]===b[j-1]){result.unshift({type:'eq',val:a[i-1]});i--;j--;}
+    else if(j>0&&(i===0||dp[i][j-1]>=dp[i-1][j])){result.unshift({type:'add',val:b[j-1]});j--;}
+    else{result.unshift({type:'del',val:a[i-1]});i--;}
+  }
+  return result;
+}
+
+function renderWordDiff(diff){
+  return diff.map(d=>{
+    if(d.type==='eq') return `<span class="wdiff-eq">${esc(d.val)}</span>`;
+    if(d.type==='add') return `<span class="wdiff-add">${esc(d.val)}</span>`;
+    return `<span class="wdiff-del">${esc(d.val)}</span>`;
+  }).join('');
+}
+
+// ─── Heading tree comparison ───
+function renderHeadingTree(nodes,missing){
+  const missSet=new Set((missing||[]).map(n=>n.text.toLowerCase()));
+  return nodes.map(n=>{
+    const indent=(n.level-1)*16;
+    const isMiss=missSet.has(n.text.toLowerCase());
+    const cls=isMiss?'htree-miss':'';
+    return `<div class="htree-node" style="padding-left:${indent}px">
+      <span class="htree-tag htree-tag-h${n.level}">${n.tag}</span>
+      <span class="htree-text ${cls}">${esc(n.text)}</span>
+    </div>`;
+  }).join('');
+}
+
+function diffHeadings(aH,tH){
+  const aSet=new Set(aH.map(h=>h.text.toLowerCase()));
+  const tSet=new Set(tH.map(h=>h.text.toLowerCase()));
+  const aMissing=tH.filter(h=>!aSet.has(h.text.toLowerCase())); // in TO-BE but not AS-IS
+  const tMissing=aH.filter(h=>!tSet.has(h.text.toLowerCase())); // in AS-IS but not TO-BE
+  return{aMissing,tMissing};
+}
+
+// ─── Spec table diff ───
+function diffSpecs(aSpecs,tSpecs){
+  const allKeys=[...new Set([...Object.keys(aSpecs),...Object.keys(tSpecs)])];
+  return allKeys.map(k=>{
+    const av=aSpecs[k]||null,tv=tSpecs[k]||null;
+    let sev='ok';
+    if(av&&!tv) sev='crit';
+    else if(!av&&tv) sev='ok'; // new in TO-BE
+    else if(av&&tv&&av!==tv) sev='warn';
+    return{key:k,av,tv,sev};
+  });
+}
+
+// ─── Deep Diff renderer ───
+function renderDeepDiff(a,t){
+  let html='';
+
+  // 1. Heading tree comparison
+  const aH=a.headings||[],tH=t.headings||[];
+  const{aMissing,tMissing}=diffHeadings(aH,tH);
+  html+='<div class="audit-section"><div class="audit-section-title">헤딩 트리 비교 (H1~H6)</div>';
+  html+=`<div style="font-size:9px;color:var(--muted);margin-bottom:6px">AS-IS ${aH.length}개 / TO-BE ${tH.length}개 | <span style="color:var(--danger)">TO-BE 누락 ${tMissing.length}개</span> | <span style="color:var(--ok)">TO-BE 신규 ${aMissing.length}개</span></div>`;
+  html+='<div class="htree-side">';
+  html+='<div><div style="font-size:9px;font-weight:700;color:var(--asis);margin-bottom:4px">AS-IS</div><div class="htree">'+renderHeadingTree(aH,tMissing)+'</div></div>';
+  html+='<div><div style="font-size:9px;font-weight:700;color:var(--tobe);margin-bottom:4px">TO-BE</div><div class="htree">'+renderHeadingTree(tH,aMissing)+'</div></div>';
+  html+='</div>';
+  if(tMissing.length){
+    html+='<div style="margin-top:6px;font-size:10px;color:var(--danger)">';
+    tMissing.forEach(h=>{html+=`<div>\u2022 <b>${h.tag}</b> "${esc(h.text)}" — TO-BE에 없음</div>`;});
+    html+='</div>';
+  }
+  html+='</div>';
+
+  // 2. Spec table key-value diff
+  const aS=a.specs||{},tS=t.specs||{};
+  const specDiffs=diffSpecs(aS,tS);
+  if(specDiffs.length){
+    const specMiss=specDiffs.filter(d=>d.sev==='crit').length;
+    const specChg=specDiffs.filter(d=>d.sev==='warn').length;
+    html+='<div class="audit-section"><div class="audit-section-title">스펙 테이블 Diff ('+specDiffs.length+'행)</div>';
+    html+=`<div style="font-size:9px;color:var(--muted);margin-bottom:6px">TO-BE 누락 <span style="color:var(--danger)">${specMiss}건</span> | 값 변경 <span style="color:var(--warn)">${specChg}건</span></div>`;
+    html+='<div class="spec-diff-row" style="font-weight:700;color:var(--muted);font-size:9px;text-transform:uppercase"><div>항목</div><div>AS-IS</div><div>TO-BE</div><div>상태</div></div>';
+    specDiffs.forEach(d=>{
+      html+=`<div class="spec-diff-row">
+        <div class="spec-diff-key" title="${esc(d.key)}">${esc(d.key)}</div>
+        <div class="spec-diff-val audit-val asis-v">${d.av?esc(d.av):'<span class="nv">-</span>'}</div>
+        <div class="spec-diff-val audit-val tobe-v">${d.tv?esc(d.tv):'<span class="nv">-</span>'}</div>
+        <div class="audit-badge badge-${d.sev}">${sevLabel(d.sev)}</div>
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  // 3. Section text word-level diff
+  const aST=a.sectionTexts||[],tST=t.sectionTexts||[];
+  if(aST.length||tST.length){
+    const aMap=new Map();aST.forEach(s=>aMap.set(s.title.toLowerCase(),s));
+    const tMap=new Map();tST.forEach(s=>tMap.set(s.title.toLowerCase(),s));
+    const matched=[];
+    aMap.forEach((aS,key)=>{
+      const tS=tMap.get(key);
+      if(tS&&aS.text!==tS.text) matched.push({title:aS.title,aText:aS.text,tText:tS.text});
+    });
+    if(matched.length){
+      html+='<div class="audit-section"><div class="audit-section-title">섹션별 텍스트 Word Diff ('+matched.length+'개 차이)</div>';
+      matched.forEach(m=>{
+        const diff=wordDiff(m.aText,m.tText);
+        html+=`<div class="wdiff-title">${esc(m.title)}</div><div class="wdiff">${renderWordDiff(diff)}</div>`;
+      });
+      html+='</div>';
+    }
+  }
+
+  if(!html) html='<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">비교 데이터가 없습니다</div>';
+  $('deepRes').innerHTML=html;
 }
 
 // ─── Helpers ───

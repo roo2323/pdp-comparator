@@ -31,7 +31,7 @@
 
     // Full audit extract
     if (e.data.type === 'AUDIT_REQUEST') {
-      const result = { seo: auditSEO(), jsonld: auditJSONLD(), sections: auditSections(), media: auditMedia() };
+      const result = { seo: auditSEO(), jsonld: auditJSONLD(), sections: auditSections(), media: auditMedia(), headings: auditHeadings(), specs: auditSpecs(), sectionTexts: auditSectionTexts() };
       window.parent.postMessage({ type: 'AUDIT_RESULT', role: myRole, reqId: e.data.reqId, result }, '*');
       return;
     }
@@ -193,6 +193,72 @@
       lazyLoadCount: lazyCnt,
       lazyLoadRate: imgs.length > 0 ? Math.round(lazyCnt / imgs.length * 1000) / 10 : 0
     };
+  }
+
+  function auditHeadings() {
+    const nodes = [];
+    document.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(el => {
+      const text = (el.innerText || el.textContent || '').trim().split('\n')[0].trim();
+      if (!text || el.offsetHeight === 0) return;
+      nodes.push({ level: parseInt(el.tagName[1]), text: text.substring(0, 120), tag: el.tagName });
+    });
+    return nodes;
+  }
+
+  function auditSpecs() {
+    const specs = {};
+    // AS-IS: .spec-info-wrap table, .tbl-spec, .spec-area table
+    // TO-BE: [class*="spec_table"], [class*="spec_list"]
+    const tables = document.querySelectorAll(
+      '.spec-info-wrap table, .tbl-spec, .spec-area table, [class*="spec_table"] table, ' +
+      '[class*="spec_list"] table, table.tbl-list, .spec-wrap table, [class*="specification"] table'
+    );
+    tables.forEach(tbl => {
+      tbl.querySelectorAll('tr').forEach(tr => {
+        const th = tr.querySelector('th, td:first-child');
+        const td = tr.querySelector('td:last-child');
+        if (th && td && th !== td) {
+          const key = (th.innerText || th.textContent || '').trim().replace(/\s+/g, ' ');
+          const val = (td.innerText || td.textContent || '').trim().replace(/\s+/g, ' ');
+          if (key && val && key.length < 60) specs[key] = val;
+        }
+      });
+    });
+    // Also try dl/dt/dd pattern
+    document.querySelectorAll('.spec-info-wrap dl, [class*="spec"] dl').forEach(dl => {
+      const dts = dl.querySelectorAll('dt');
+      const dds = dl.querySelectorAll('dd');
+      dts.forEach((dt, i) => {
+        const key = (dt.innerText || dt.textContent || '').trim().replace(/\s+/g, ' ');
+        const val = dds[i] ? (dds[i].innerText || dds[i].textContent || '').trim().replace(/\s+/g, ' ') : '';
+        if (key && val && key.length < 60) specs[key] = val;
+      });
+    });
+    return specs;
+  }
+
+  function auditSectionTexts() {
+    const results = [];
+    const candidates = document.querySelectorAll(
+      'section, .story-wrap, .component-wrap, [class*="story"], [class*="section_wrap"], ' +
+      '[class*="content_section"], [class*="marketing"]'
+    );
+    const seen = new Set();
+    candidates.forEach(el => {
+      const heading = el.querySelector('h1,h2,h3,h4,.component-header__title,[class*="section_title"]');
+      let title = heading ? (heading.innerText || heading.textContent || '').trim().split('\n')[0].trim() : null;
+      if (!title || el.offsetHeight < 50) return;
+      if (title.length > 80) title = title.substring(0, 80);
+      if (seen.has(title.toLowerCase())) return;
+      seen.add(title.toLowerCase());
+      // Get text content excluding scripts/styles, limit to 500 chars
+      const clone = el.cloneNode(true);
+      clone.querySelectorAll('script,style,noscript').forEach(s => s.remove());
+      let text = (clone.innerText || clone.textContent || '').trim().replace(/\s+/g, ' ');
+      if (text.length > 500) text = text.substring(0, 500);
+      results.push({ title, text });
+    });
+    return results;
   }
 
   // Scroll event - send ratio to parent

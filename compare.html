@@ -108,6 +108,31 @@ body{display:flex;flex-direction:column;}
 .export-bar{display:flex;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);}
 .export-bar .btn{font-size:10px;padding:4px 10px;flex:1;}
 
+/* Word diff */
+.wdiff{font-size:10px;line-height:1.6;padding:8px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);margin-bottom:6px;word-break:break-all;max-height:150px;overflow-y:auto;}
+.wdiff-add{background:rgba(52,211,153,.2);color:var(--ok);padding:0 2px;border-radius:2px;}
+.wdiff-del{background:rgba(248,113,113,.2);color:var(--danger);text-decoration:line-through;padding:0 2px;border-radius:2px;}
+.wdiff-eq{color:var(--muted);}
+.wdiff-title{font-size:10px;font-weight:600;color:var(--text);margin-bottom:4px;padding:6px 0 2px;}
+
+/* Heading tree */
+.htree{font-size:10px;padding:8px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);margin-bottom:8px;max-height:300px;overflow-y:auto;}
+.htree-node{padding:2px 0;display:flex;align-items:center;gap:4px;}
+.htree-tag{font-weight:700;font-family:monospace;font-size:9px;padding:1px 4px;border-radius:3px;min-width:24px;text-align:center;}
+.htree-tag-h1{background:rgba(129,140,248,.2);color:var(--accent2);}
+.htree-tag-h2{background:rgba(56,189,248,.15);color:var(--asis);}
+.htree-tag-h3{background:rgba(167,139,250,.15);color:var(--tobe);}
+.htree-tag-h4,.htree-tag-h5,.htree-tag-h6{background:var(--border);color:var(--muted);}
+.htree-text{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.htree-miss{opacity:.5;text-decoration:line-through;color:var(--danger);}
+.htree-new{color:var(--ok);}
+.htree-side{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+/* Spec diff */
+.spec-diff-row{display:grid;grid-template-columns:120px 1fr 1fr 40px;gap:4px;margin-bottom:3px;font-size:10px;align-items:stretch;}
+.spec-diff-key{padding:4px 6px;color:var(--muted);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.spec-diff-val{padding:4px 6px;border-radius:4px;font-family:monospace;font-size:9px;word-break:break-all;line-height:1.3;}
+
 /* Existing diff styles */
 #runDiff{width:100%;margin-bottom:12px;padding:8px;background:color-mix(in srgb,var(--accent) 15%,transparent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);border-radius:6px;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;}
 .diff-sum{display:flex;gap:8px;margin-bottom:10px;}
@@ -189,6 +214,7 @@ body{display:flex;flex-direction:column;}
       <div class="ptab" data-tab="jsonld">JSON-LD</div>
       <div class="ptab" data-tab="sections">섹션</div>
       <div class="ptab" data-tab="media">미디어</div>
+      <div class="ptab" data-tab="deep">Deep Diff</div>
       <div class="ptab" data-tab="diff">DOM</div>
       <div class="ptab" data-tab="perf">성능</div>
       <div class="ptab" data-tab="config">설정</div>
@@ -213,6 +239,8 @@ body{display:flex;flex-direction:column;}
     <div class="pbody" id="tab-sections"><div id="sectionsRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- 미디어 -->
     <div class="pbody" id="tab-media"><div id="mediaRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
+    <!-- Deep Diff -->
+    <div class="pbody" id="tab-deep"><div id="deepRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- DOM 비교 (existing) -->
     <div class="pbody" id="tab-diff">
       <button id="runDiff">&#x25B6; DOM 비교 실행</button>
