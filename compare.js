@@ -191,7 +191,7 @@ function runAudit(){
 }
 
 function clearAuditTabs(){
-  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes','deepRes','imagesRes','trackingRes','scriptsRes'].forEach(id=>{
+  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes','deepRes','imagesRes','trackingRes'].forEach(id=>{
     const el=$(id);if(el)el.innerHTML=id.endsWith('Res')?'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div>':'';
   });
   $('exportBar').style.display='none';
@@ -233,8 +233,7 @@ function renderFullAudit(a,t){
   renderMediaTab(a.media,t.media,med);
   renderDeepDiff(a,t);
   renderImagesDiff(a.images||[],t.images||[]);
-  renderTrackingDiff(a.tracking||{},t.tracking||{});
-  renderScriptsDiff(a.scripts||[],t.scripts||[]);
+  renderTrackingDiff(a.tracking||{},t.tracking||{},a.scripts||[],t.scripts||[]);
   toast('감사 완료 — Critical '+crit+'건');
 }
 
@@ -544,8 +543,11 @@ function renderImagesDiff(aImgs,tImgs){
 }
 
 // ═══════════════════════ Tracking Diff (3차) ═══════════════════════
-function renderTrackingDiff(a,t){
+function renderTrackingDiff(a,t,aScr,tScr){
   let html='';
+
+  // ─── 3rd Party Scripts ───
+  html+=renderScriptsSection(aScr||[],tScr||[]);
 
   // GTM Container IDs
   html+='<div class="audit-section"><div class="audit-section-title">GTM 컨테이너</div>';
@@ -617,8 +619,8 @@ function renderTrackKV(a,t){
   return html;
 }
 
-// ═══════════════════════ Scripts Diff ═══════════════════════
-function renderScriptsDiff(aScr,tScr){
+// ═══════════════════════ Scripts Section (트래킹 탭에 통합) ═══════════════════════
+function renderScriptsSection(aScr,tScr){
   const a3p=aScr.filter(s=>s.is3p),t3p=tScr.filter(s=>s.is3p);
   const a1p=aScr.filter(s=>!s.is3p),t1p=tScr.filter(s=>!s.is3p);
   const aHosts=new Set(a3p.map(s=>s.host)),tHosts=new Set(t3p.map(s=>s.host));
@@ -696,7 +698,7 @@ function renderScriptsDiff(aScr,tScr){
   html+=`<div class="audit-section"><div class="audit-section-title">1st Party 스크립트</div>`;
   html+=`<div style="font-size:10px;color:var(--muted)">AS-IS <b>${a1p.length}</b>개 / TO-BE <b>${t1p.length}</b>개</div></div>`;
 
-  $('scriptsRes').innerHTML=html;
+  return html;
 }
 
 // ═══════════════════════ Deep Diff (2차) ═══════════════════════
