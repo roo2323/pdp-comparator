@@ -108,6 +108,24 @@ body{display:flex;flex-direction:column;}
 .export-bar{display:flex;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--border);}
 .export-bar .btn{font-size:10px;padding:4px 10px;flex:1;}
 
+/* Image diff */
+.img-set-section{margin-bottom:12px;}
+.img-set-title{font-size:10px;font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.img-item{font-size:9px;padding:3px 6px;margin-bottom:2px;border-radius:4px;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px;}
+.img-item .img-sec{color:var(--muted);font-size:8px;font-style:italic;flex-shrink:0;}
+.img-only-a{background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 20%,transparent);}
+.img-only-t{background:color-mix(in srgb,var(--ok) 10%,transparent);color:var(--ok);border:1px solid color-mix(in srgb,var(--ok) 20%,transparent);}
+.img-common{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+
+/* Tracking diff */
+.track-ev{display:inline-block;font-size:9px;padding:2px 6px;border-radius:4px;margin:2px;font-family:monospace;font-weight:600;}
+.track-ev-both{background:var(--ok-bg);color:var(--ok);border:1px solid rgba(52,211,153,.3);}
+.track-ev-asis{background:color-mix(in srgb,var(--asis) 12%,transparent);color:var(--asis);border:1px solid color-mix(in srgb,var(--asis) 25%,transparent);}
+.track-ev-tobe{background:color-mix(in srgb,var(--tobe) 12%,transparent);color:var(--tobe);border:1px solid color-mix(in srgb,var(--tobe) 25%,transparent);}
+.track-kv{display:grid;grid-template-columns:140px 1fr 1fr;gap:3px;margin-bottom:2px;font-size:9px;align-items:stretch;}
+.track-kv-key{padding:3px 6px;color:var(--muted);font-weight:600;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.track-kv-val{padding:3px 6px;border-radius:3px;font-family:monospace;word-break:break-all;line-height:1.3;}
+
 /* Word diff */
 .wdiff{font-size:10px;line-height:1.6;padding:8px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);margin-bottom:6px;word-break:break-all;max-height:150px;overflow-y:auto;}
 .wdiff-add{background:rgba(52,211,153,.2);color:var(--ok);padding:0 2px;border-radius:2px;}
@@ -214,6 +232,8 @@ body{display:flex;flex-direction:column;}
       <div class="ptab" data-tab="jsonld">JSON-LD</div>
       <div class="ptab" data-tab="sections">섹션</div>
       <div class="ptab" data-tab="media">미디어</div>
+      <div class="ptab" data-tab="images">이미지</div>
+      <div class="ptab" data-tab="tracking">트래킹</div>
       <div class="ptab" data-tab="deep">Deep Diff</div>
       <div class="ptab" data-tab="diff">DOM</div>
       <div class="ptab" data-tab="perf">성능</div>
@@ -239,6 +259,10 @@ body{display:flex;flex-direction:column;}
     <div class="pbody" id="tab-sections"><div id="sectionsRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- 미디어 -->
     <div class="pbody" id="tab-media"><div id="mediaRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
+    <!-- 이미지 Diff -->
+    <div class="pbody" id="tab-images"><div id="imagesRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
+    <!-- 트래킹 -->
+    <div class="pbody" id="tab-tracking"><div id="trackingRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- Deep Diff -->
     <div class="pbody" id="tab-deep"><div id="deepRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- DOM 비교 (existing) -->

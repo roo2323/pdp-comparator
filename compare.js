@@ -191,7 +191,7 @@ function runAudit(){
 }
 
 function clearAuditTabs(){
-  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes','deepRes'].forEach(id=>{
+  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes','deepRes','imagesRes','trackingRes'].forEach(id=>{
     const el=$(id);if(el)el.innerHTML=id.endsWith('Res')?'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div>':'';
   });
   $('exportBar').style.display='none';
@@ -232,6 +232,8 @@ function renderFullAudit(a,t){
   renderSectionsTab(a.sections,t.sections,sec);
   renderMediaTab(a.media,t.media,med);
   renderDeepDiff(a,t);
+  renderImagesDiff(a.images||[],t.images||[]);
+  renderTrackingDiff(a.tracking||{},t.tracking||{});
   toast('감사 완료 — Critical '+crit+'건');
 }
 
@@ -461,6 +463,157 @@ function renderMediaTab(a,t){
   });
   html+='</div>';
   $('mediaRes').innerHTML=html;
+}
+
+// ═══════════════════════ Image Diff (3차) ═══════════════════════
+function renderImagesDiff(aImgs,tImgs){
+  const aPaths=new Set(aImgs.map(i=>i.path));
+  const tPaths=new Set(tImgs.map(i=>i.path));
+  const common=[...aPaths].filter(p=>tPaths.has(p));
+  const onlyA=[...aPaths].filter(p=>!tPaths.has(p));
+  const onlyT=[...tPaths].filter(p=>!aPaths.has(p));
+  const aByPath=new Map();aImgs.forEach(i=>aByPath.set(i.path,i));
+  const tByPath=new Map();tImgs.forEach(i=>tByPath.set(i.path,i));
+
+  let html=`<div class="audit-section"><div class="audit-section-title">이미지 src 집합 비교</div>`;
+  html+=`<div style="font-size:10px;color:var(--muted);margin-bottom:8px">AS-IS <b>${aImgs.length}</b>장 / TO-BE <b>${tImgs.length}</b>장 | 공통 <b>${common.length}</b> | <span style="color:var(--danger)">AS-IS only ${onlyA.length}</span> | <span style="color:var(--ok)">TO-BE only ${onlyT.length}</span></div>`;
+
+  // AS-IS only
+  if(onlyA.length){
+    html+=`<div class="img-set-section"><div class="img-set-title" style="color:var(--danger)">AS-IS only (${onlyA.length}) — TO-BE에 없는 이미지</div>`;
+    onlyA.slice(0,50).forEach(p=>{
+      const img=aByPath.get(p);
+      html+=`<div class="img-item img-only-a" title="${esc(p)}"><span>${esc(p.length>70?'…'+p.slice(-67):p)}</span>${img?.section?`<span class="img-sec">${esc(img.section)}</span>`:''}</div>`;
+    });
+    if(onlyA.length>50) html+=`<div style="font-size:9px;color:var(--muted);padding:4px 6px">+${onlyA.length-50}개 더...</div>`;
+    html+='</div>';
+  }
+
+  // TO-BE only
+  if(onlyT.length){
+    html+=`<div class="img-set-section"><div class="img-set-title" style="color:var(--ok)">TO-BE only (${onlyT.length}) — 새로 추가된 이미지</div>`;
+    onlyT.slice(0,50).forEach(p=>{
+      const img=tByPath.get(p);
+      html+=`<div class="img-item img-only-t" title="${esc(p)}"><span>${esc(p.length>70?'…'+p.slice(-67):p)}</span>${img?.section?`<span class="img-sec">${esc(img.section)}</span>`:''}</div>`;
+    });
+    if(onlyT.length>50) html+=`<div style="font-size:9px;color:var(--muted);padding:4px 6px">+${onlyT.length-50}개 더...</div>`;
+    html+='</div>';
+  }
+
+  // Common with dimension diff
+  const dimDiffs=common.filter(p=>{
+    const a=aByPath.get(p),t=tByPath.get(p);
+    return a&&t&&(a.width!==t.width||a.height!==t.height);
+  });
+  if(dimDiffs.length){
+    html+=`<div class="img-set-section"><div class="img-set-title" style="color:var(--warn)">크기 불일치 (${dimDiffs.length})</div>`;
+    html+='<div style="display:grid;grid-template-columns:1fr 70px 70px;gap:3px;font-size:9px;font-weight:700;color:var(--muted);margin-bottom:4px"><div>경로</div><div>AS-IS</div><div>TO-BE</div></div>';
+    dimDiffs.slice(0,30).forEach(p=>{
+      const a=aByPath.get(p),t=tByPath.get(p);
+      html+=`<div style="display:grid;grid-template-columns:1fr 70px 70px;gap:3px;font-size:9px;margin-bottom:2px">
+        <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)" title="${esc(p)}">${esc(p.length>50?'…'+p.slice(-47):p)}</div>
+        <div style="color:var(--asis)">${a.width}×${a.height}</div>
+        <div style="color:var(--tobe)">${t.width}×${t.height}</div>
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  // Section-based image count comparison
+  const aSecMap=new Map(),tSecMap=new Map();
+  aImgs.forEach(i=>{const s=i.section||'(기타)';aSecMap.set(s,(aSecMap.get(s)||0)+1);});
+  tImgs.forEach(i=>{const s=i.section||'(기타)';tSecMap.set(s,(tSecMap.get(s)||0)+1);});
+  const allSecs=[...new Set([...aSecMap.keys(),...tSecMap.keys()])];
+  if(allSecs.length>1){
+    html+=`<div class="img-set-section"><div class="img-set-title" style="color:var(--accent2)">섹션별 이미지 수</div>`;
+    html+='<div class="matrix-row header"><div>섹션</div><div>AS-IS</div><div>TO-BE</div></div>';
+    allSecs.forEach(s=>{
+      const ac=aSecMap.get(s)||0,tc=tSecMap.get(s)||0;
+      html+=`<div class="matrix-row">
+        <div class="matrix-label">${esc(s)}</div>
+        <div class="matrix-cell" style="color:var(--asis)">${ac}</div>
+        <div class="matrix-cell" style="color:var(--tobe)">${tc}</div>
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  html+='</div>';
+  $('imagesRes').innerHTML=html;
+}
+
+// ═══════════════════════ Tracking Diff (3차) ═══════════════════════
+function renderTrackingDiff(a,t){
+  let html='';
+
+  // GTM Container IDs
+  html+='<div class="audit-section"><div class="audit-section-title">GTM 컨테이너</div>';
+  const aGtm=a.gtmIds||[],tGtm=t.gtmIds||[];
+  if(!aGtm.length&&!tGtm.length) html+='<div style="font-size:10px;color:var(--muted)">GTM 미감지</div>';
+  else{
+    html+='<div class="audit-row header"><div>항목</div><div>AS-IS</div><div>TO-BE</div><div>상태</div></div>';
+    html+=`<div class="audit-row">
+      <div class="audit-key">GTM ID</div>
+      <div class="audit-val asis-v">${aGtm.join(', ')||'<span class="nv">없음</span>'}</div>
+      <div class="audit-val tobe-v">${tGtm.join(', ')||'<span class="nv">없음</span>'}</div>
+      <div class="audit-badge badge-${aGtm.join()===tGtm.join()?'ok':'warn'}">${aGtm.join()===tGtm.join()?'OK':'DIFF'}</div>
+    </div>`;
+    const aGa=a.gaIds||[],tGa=t.gaIds||[];
+    html+=`<div class="audit-row">
+      <div class="audit-key">GA4 ID</div>
+      <div class="audit-val asis-v">${aGa.join(', ')||'<span class="nv">없음</span>'}</div>
+      <div class="audit-val tobe-v">${tGa.join(', ')||'<span class="nv">없음</span>'}</div>
+      <div class="audit-badge badge-${aGa.join()===tGa.join()?'ok':'warn'}">${aGa.join()===tGa.join()?'OK':'DIFF'}</div>
+    </div>`;
+  }
+  html+='</div>';
+
+  // dataLayer event types
+  const aEv=a.eventTypes||[],tEv=t.eventTypes||[];
+  const bothEv=aEv.filter(e=>tEv.includes(e));
+  const onlyAEv=aEv.filter(e=>!tEv.includes(e));
+  const onlyTEv=tEv.filter(e=>!aEv.includes(e));
+  html+=`<div class="audit-section"><div class="audit-section-title">dataLayer 이벤트 (AS-IS ${a.dataLayerCount||0}건 / TO-BE ${t.dataLayerCount||0}건)</div>`;
+  html+=`<div style="font-size:9px;color:var(--muted);margin-bottom:6px">이벤트 타입: 공통 ${bothEv.length} | <span style="color:var(--asis)">AS-IS only ${onlyAEv.length}</span> | <span style="color:var(--tobe)">TO-BE only ${onlyTEv.length}</span></div>`;
+  html+='<div style="margin-bottom:8px">';
+  bothEv.forEach(e=>{html+=`<span class="track-ev track-ev-both">${esc(e)}</span>`;});
+  onlyAEv.forEach(e=>{html+=`<span class="track-ev track-ev-asis">${esc(e)}</span>`;});
+  onlyTEv.forEach(e=>{html+=`<span class="track-ev track-ev-tobe">${esc(e)}</span>`;});
+  if(!bothEv.length&&!onlyAEv.length&&!onlyTEv.length) html+='<span style="font-size:10px;color:var(--muted)">이벤트 없음</span>';
+  html+='</div></div>';
+
+  // page_view comparison
+  if(a.pageView||t.pageView){
+    html+='<div class="audit-section"><div class="audit-section-title">page_view 파라미터</div>';
+    html+=renderTrackKV(a.pageView||{},t.pageView||{});
+    html+='</div>';
+  }
+
+  // view_item comparison
+  if(a.viewItem||t.viewItem){
+    html+='<div class="audit-section"><div class="audit-section-title">view_item 파라미터</div>';
+    html+=renderTrackKV(a.viewItem||{},t.viewItem||{});
+    html+='</div>';
+  }
+
+  $('trackingRes').innerHTML=html;
+}
+
+function renderTrackKV(a,t){
+  const allKeys=[...new Set([...Object.keys(a),...Object.keys(t)])].sort();
+  if(!allKeys.length) return'<div style="font-size:10px;color:var(--muted)">데이터 없음</div>';
+  let html='<div class="track-kv" style="font-weight:700;color:var(--muted);font-size:8px;text-transform:uppercase"><div>Key</div><div>AS-IS</div><div>TO-BE</div></div>';
+  allKeys.forEach(k=>{
+    const av=a[k]||null,tv=t[k]||null;
+    const match=av===tv;
+    const cls=!av&&tv?'tobe':av&&!tv?'danger':match?'':'warn';
+    html+=`<div class="track-kv">
+      <div class="track-kv-key" title="${esc(k)}">${esc(k)}</div>
+      <div class="track-kv-val audit-val asis-v">${av?esc(av.substring(0,80)):'<span class="nv">-</span>'}</div>
+      <div class="track-kv-val audit-val tobe-v">${tv?esc(tv.substring(0,80)):'<span class="nv">-</span>'}</div>
+    </div>`;
+  });
+  return html;
 }
 
 // ═══════════════════════ Deep Diff (2차) ═══════════════════════

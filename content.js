@@ -31,7 +31,7 @@
 
     // Full audit extract
     if (e.data.type === 'AUDIT_REQUEST') {
-      const result = { seo: auditSEO(), jsonld: auditJSONLD(), sections: auditSections(), media: auditMedia(), headings: auditHeadings(), specs: auditSpecs(), sectionTexts: auditSectionTexts() };
+      const result = { seo: auditSEO(), jsonld: auditJSONLD(), sections: auditSections(), media: auditMedia(), headings: auditHeadings(), specs: auditSpecs(), sectionTexts: auditSectionTexts(), images: auditImages(), tracking: auditTracking() };
       window.parent.postMessage({ type: 'AUDIT_RESULT', role: myRole, reqId: e.data.reqId, result }, '*');
       return;
     }
@@ -259,6 +259,100 @@
       results.push({ title, text });
     });
     return results;
+  }
+
+  function auditImages() {
+    const imgs = [];
+    document.querySelectorAll('img').forEach((img, idx) => {
+      const src = img.src || img.dataset.src || img.dataset.lazySrc || '';
+      if (!src) return;
+      // Normalize: strip domain, keep path
+      const path = src.replace(/https?:\/\/[^/]+/, '').split('?')[0];
+      const alt = img.getAttribute('alt');
+      const section = closestSection(img);
+      imgs.push({
+        idx, path, src,
+        alt: alt || null,
+        width: img.naturalWidth || img.width || 0,
+        height: img.naturalHeight || img.height || 0,
+        loading: img.loading || 'eager',
+        visible: img.offsetHeight > 0,
+        section
+      });
+    });
+    return imgs;
+  }
+
+  function closestSection(el) {
+    let node = el;
+    for (let i = 0; i < 10 && node; i++) {
+      node = node.parentElement;
+      if (!node) break;
+      if (node.tagName === 'SECTION' || /story|component|section/i.test(node.className || '')) {
+        const h = node.querySelector('h1,h2,h3,h4,.component-header__title,[class*="section_title"]');
+        if (h) return (h.innerText || h.textContent || '').trim().split('\n')[0].substring(0, 60);
+      }
+    }
+    return null;
+  }
+
+  function auditTracking() {
+    // dataLayer
+    const dl = window.dataLayer || [];
+    const events = dl.map(e => {
+      if (typeof e !== 'object') return null;
+      return { event: e.event || null, keys: Object.keys(e).sort() };
+    }).filter(Boolean);
+
+    // Extract unique event types
+    const eventTypes = [...new Set(events.map(e => e.event).filter(Boolean))];
+
+    // GA4 view_item / page_view params
+    const viewItem = dl.find(e => e.event === 'view_item') || null;
+    const pageView = dl.find(e => e.event === 'page_view') || null;
+
+    // GTM container IDs from script tags
+    const gtmIds = [];
+    document.querySelectorAll('script').forEach(s => {
+      const text = s.src || s.textContent || '';
+      const m = text.match(/GTM-[A-Z0-9]+/g);
+      if (m) m.forEach(id => { if (!gtmIds.includes(id)) gtmIds.push(id); });
+    });
+
+    // GA4 measurement IDs
+    const gaIds = [];
+    document.querySelectorAll('script').forEach(s => {
+      const text = s.src || s.textContent || '';
+      const m = text.match(/G-[A-Z0-9]+/g);
+      if (m) m.forEach(id => { if (!gaIds.includes(id)) gaIds.push(id); });
+    });
+
+    return {
+      dataLayerCount: dl.length,
+      eventTypes,
+      viewItem: viewItem ? simplify(viewItem) : null,
+      pageView: pageView ? simplify(pageView) : null,
+      gtmIds,
+      gaIds
+    };
+  }
+
+  function simplify(obj) {
+    // Flatten to key: value for display, max depth 2
+    const result = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (v === null || v === undefined) continue;
+      if (typeof v === 'object' && !Array.isArray(v)) {
+        for (const [k2, v2] of Object.entries(v)) {
+          result[k + '.' + k2] = typeof v2 === 'object' ? JSON.stringify(v2).substring(0, 100) : String(v2);
+        }
+      } else if (Array.isArray(v)) {
+        result[k] = JSON.stringify(v).substring(0, 150);
+      } else {
+        result[k] = String(v);
+      }
+    }
+    return result;
   }
 
   // Scroll event - send ratio to parent
