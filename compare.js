@@ -106,9 +106,8 @@ function bind(){
 }
 
 const BASE='https://wwwdev50.lge.co.kr';
-const API_BASE='http://localhost:18093';
+const API_BASE='http://pdpapisvc.lgekrdev.lge.co.kr';
 
-// ═══════════════════════ Page Load ═══════════════════════
 function load(){
   const m=$('modelInput').value.trim();
   if(!m){toast('모델 ID를 입력해주세요');return;}
@@ -123,16 +122,26 @@ function load(){
   toast('URL 조회 중...');
   fetch(API_BASE+'/api/v1/models/'+m+'/purchase-type')
     .then(r=>r.json()).then(res=>{
-      const d=res.data;let asisPath,tobeUrl;
+      const d=res.data;
+      if(!d){toast('API 응답 없음 — 폴백 모드');loadFallback(m,pdpType);return;}
+      let asisPath,tobeUrl;
       if(pdpType==='SUBSCRIPTION'&&d.subscription&&d.subscription.url){asisPath=d.subscription.url;tobeUrl=BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION';}
       else if(d.purchase&&d.purchase.url){asisPath=d.purchase.url;tobeUrl=BASE+'/model?modelId='+m;}
-      else{toast('URL을 찾을 수 없습니다');return;}
+      else{toast('URL 없음 — 폴백 모드');loadFallback(m,pdpType);return;}
       $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
       $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
       fs('asis','loading');fs('tobe','loading');
       $('asisF').src=BASE+asisPath;$('tobeF').src=tobeUrl;
       toast('URL 자동 설정 완료');
-    }).catch(e=>{toast('API 오류 — URL을 직접 입력해주세요');console.error(e);});
+    }).catch(e=>{toast('API 오류 — 폴백 모드');console.error(e);loadFallback(m,pdpType);});
+}
+function loadFallback(m,pdpType){
+  // API 없이 URL 패턴으로 직접 생성
+  const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
+  $('asisUrl').value='';$('tobeUrl').value=tobeUrl;
+  $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
+  fs('tobe','loading');$('tobeF').src=tobeUrl;
+  toast('TO-BE만 로드 (AS-IS URL은 직접 입력 필요)');
 }
 function fs(s,st){const d=$(s+'D'),t=$(s+'St'),o=$(s+'Ov');d.className='dot '+st;t.textContent=st==='loading'?'로딩 중...':st==='ready'?'준비됨':'오류';o.classList.toggle('show',st==='loading');}
 function fl(s){
