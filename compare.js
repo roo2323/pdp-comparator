@@ -49,10 +49,16 @@ const TX={
   "최대혜택 월요금": t=>(t.match(/[\d,]+/)||[t])[0],
   "총요금": t=>(t.match(/[\d,]+/)||[t])[0],
   "리뷰 평점": t=>{
-    const cleaned=t.replace(/별점|현재|리뷰\s*개수|점|개/g,'').trim();
-    const nums=cleaned.match(/[\d.,]+/g);
-    if(nums&&nums.length>=2) return nums[0]+'('+nums[1]+')';
-    if(nums&&nums.length===1) return nums[0];
+    const cleaned=t.replace(/별점|현재|리뷰\s*개수|점|개|중|만점/g,'').trim();
+    const nums=cleaned.match(/[\d.,+]+/g);
+    if(!nums) return cleaned;
+    // Filter out max score "5" (exact match, not 4.5 etc)
+    const filtered=nums.filter(n=>n!=='5');
+    // First decimal = rating, remaining = count
+    const rating=filtered.find(n=>/\./.test(n))||filtered[0];
+    const count=filtered.find(n=>n!==rating);
+    if(rating&&count) return rating+'('+count+')';
+    if(rating) return rating;
     return cleaned;
   },
 };
