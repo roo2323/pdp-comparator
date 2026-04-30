@@ -345,13 +345,47 @@
 
   // Fetch intercept for API capture
   const _fetch = window.fetch.bind(window);
+  const API_PATTERNS = [
+    /\/ajax\//, /\/api\/v\d+\//, /pdpapisvc/, /pdp-api/, /\/pdp\//,
+    /\/_next\/data\//, /\/model\?/, /\/product/, /\/subscription/,
+    /\/purchase/, /\/price/, /\/review/, /\/recommend/, /\/benefit/,
+    /\/spec/, /\/coupon/, /\/cart/, /\/option/, /\/delivery/
+  ];
+  const EXCLUDE_PATTERNS = [
+    /\.(js|css|png|jpg|jpeg|gif|svg|webp|avif|woff|woff2|ico)(\?|$)/i,
+    /google|facebook|analytics|gtag|dataLayer|doubleclick|adsense/i,
+    /fonts\.googleapis|cdn\./i
+  ];
   window.fetch = async function (...args) {
     const res = await _fetch(...args);
     try {
-      const url = typeof args[0] === 'string' ? args[0] : args[0].url;
-      if (url && (url.includes('pdpapisvc') || url.includes('pdp-api') || url.includes('/pdp/')))
-        res.clone().json().then(data => window.parent.postMessage({ type: 'API_CAPTURED', url, data }, '*')).catch(() => {});
+      const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
+      if (url && API_PATTERNS.some(p => p.test(url)) && !EXCLUDE_PATTERNS.some(p => p.test(url))) {
+        res.clone().json().then(data => {
+          window.parent.postMessage({ type: 'API_CAPTURED', url, data, role: myRole }, '*');
+        }).catch(() => {});
+      }
     } catch (e) {}
     return res;
+  };
+
+  // XMLHttpRequest intercept (일부 레거시에서 사용)
+  const _xhrOpen = XMLHttpRequest.prototype.open;
+  const _xhrSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    this._captureUrl = url;
+    return _xhrOpen.call(this, method, url, ...rest);
+  };
+  XMLHttpRequest.prototype.send = function (...args) {
+    this.addEventListener('load', function () {
+      try {
+        const url = this._captureUrl || '';
+        if (API_PATTERNS.some(p => p.test(url)) && !EXCLUDE_PATTERNS.some(p => p.test(url))) {
+          const data = JSON.parse(this.responseText);
+          window.parent.postMessage({ type: 'API_CAPTURED', url, data, role: myRole }, '*');
+        }
+      } catch (e) {}
+    });
+    return _xhrSend.apply(this, args);
   };
 })();

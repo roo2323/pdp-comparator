@@ -60,7 +60,7 @@ function applyTx(results){const out={};for(const k in results){let v=results[k];
 
 // ═══════════════════════ State ═══════════════════════
 let sel=[],sync=true,aR=false,tR=false,cApi=null,pOpen=true,bSF=null,pRes={},rId=0,mobileOn=false,perfData={};
-let auditRes={},auditId=0,lastAudit=null;
+let auditRes={},auditId=0,lastAudit=null,apiList=[];
 
 // ═══════════════════════ Init ═══════════════════════
 function refreshSel(){sel=getDS();$('selCfg').value=JSON.stringify(sel,null,2);}
@@ -111,7 +111,7 @@ function load(){
   localStorage.setItem('pdp-type',pdpType);refreshSel();
   $('dres').innerHTML='';$('dsum').style.display='none';
   $('apiCont').style.display='none';$('apiSt').style.display='block';$('apiSt').textContent='로딩 중... API 대기 중';
-  cApi=null;aR=false;tR=false;perfData={};auditRes={};lastAudit=null;
+  cApi=null;aR=false;tR=false;perfData={};auditRes={};lastAudit=null;apiList=[];
   $('perfSt').textContent='페이지 로드 완료 후 자동 측정됩니다';$('perfRes').innerHTML='';
   clearAuditTabs();
   toast('URL 조회 중...');
@@ -167,8 +167,11 @@ function onMsg(e){
     else $('perfSt').textContent=(perfData.asis?'AS-IS':'TO-BE')+' 측정 완료, 나머지 대기 중...';
   }
   if(e.data.type==='API_CAPTURED'){
-    cApi=e.data;$('apiSt').style.display='none';$('apiCont').style.display='block';
-    $('apiUrl').textContent=e.data.url;$('apiJson').textContent=JSON.stringify(e.data.data,null,2);toast('API 응답 캡처됨');
+    const role=e.data.role||'unknown';
+    const urlShort=(e.data.url||'').replace(/https?:\/\/[^/]+/,'').split('?')[0];
+    apiList.push({url:e.data.url,data:e.data.data,role,time:new Date().toLocaleTimeString()});
+    renderApiList();
+    toast((role==='asis'?'AS-IS':'TO-BE')+' API 캡처: '+urlShort);
   }
 }
 
@@ -635,6 +638,32 @@ ${$('auditSummary').innerHTML}${$('seoRes').innerHTML}${$('jsonldRes').innerHTML
 function dl(content,filename,type){
   const blob=new Blob([content],{type});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href);
+}
+
+// ═══════════════════════ API List ═══════════════════════
+function renderApiList(){
+  if(!apiList.length){$('apiSt').style.display='block';$('apiCont').style.display='none';return;}
+  $('apiSt').style.display='none';$('apiCont').style.display='block';
+  const grouped={asis:[],tobe:[]};
+  apiList.forEach(a=>{(grouped[a.role]||grouped.tobe).push(a);});
+  let html=`<div style="font-size:10px;color:var(--muted);margin-bottom:8px">${apiList.length}개 API 캡처됨</div>`;
+  ['asis','tobe'].forEach(role=>{
+    const list=grouped[role];
+    if(!list.length) return;
+    const color=role==='asis'?'var(--asis)':'var(--tobe)';
+    const label=role==='asis'?'AS-IS':'TO-BE';
+    html+=`<div style="font-size:10px;font-weight:700;color:${color};margin:8px 0 4px">${label} (${list.length})</div>`;
+    list.forEach((a,i)=>{
+      const path=(a.url||'').replace(/https?:\/\/[^/]+/,'');
+      const short=path.length>80?path.substring(0,77)+'…':path;
+      const id=`api-${role}-${i}`;
+      html+=`<div style="margin-bottom:6px">
+        <div class="aurl" style="cursor:pointer;font-size:9px" onclick="document.getElementById('${id}').style.display=document.getElementById('${id}').style.display==='none'?'block':'none'" title="${esc(a.url)}">${a.time} ${esc(short)}</div>
+        <div id="${id}" style="display:none"><pre style="font-family:monospace;font-size:9px;line-height:1.5;white-space:pre-wrap;word-break:break-word;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;max-height:300px;overflow-y:auto;color:#a5f3fc">${esc(JSON.stringify(a.data,null,2))}</pre></div>
+      </div>`;
+    });
+  });
+  $('apiCont').innerHTML=html;
 }
 
 // ═══════════════════════ DOM Diff (existing) ═══════════════════════

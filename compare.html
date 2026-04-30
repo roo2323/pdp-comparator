@@ -263,10 +263,10 @@ body{display:flex;flex-direction:column;}
       <button class="btn btn-a" id="saveCfg" style="width:100%;padding:7px">저장</button>
       <p style="color:var(--muted);font-size:10px;margin-top:8px;line-height:1.5">key: 비교 항목 이름<br>asis: AS-IS CSS 셀렉터<br>tobe: TO-BE CSS 셀렉터</p>
     </div>
-    <!-- API (existing) -->
+    <!-- API -->
     <div class="pbody" id="tab-api">
-      <div id="apiSt">페이지를 로드하면 TO-BE API 응답이<br>자동으로 캡처됩니다.</div>
-      <div id="apiCont" style="display:none"><div class="aurl" id="apiUrl"></div><div id="apiJson"></div></div>
+      <div id="apiSt">페이지를 로드하면 AS-IS/TO-BE의<br>CSR API 호출이 자동 캡처됩니다.<br><br><span style="font-size:10px;color:var(--muted)">fetch + XMLHttpRequest 모두 감지</span></div>
+      <div id="apiCont" style="display:none"></div>
     </div>
   </div>
 </div>
