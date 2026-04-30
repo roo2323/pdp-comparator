@@ -31,7 +31,7 @@
 
     // Full audit extract
     if (e.data.type === 'AUDIT_REQUEST') {
-      const result = { seo: auditSEO(), jsonld: auditJSONLD(), sections: auditSections(), media: auditMedia(), headings: auditHeadings(), specs: auditSpecs(), sectionTexts: auditSectionTexts(), images: auditImages(), tracking: auditTracking() };
+      const result = { seo: auditSEO(), jsonld: auditJSONLD(), sections: auditSections(), media: auditMedia(), headings: auditHeadings(), specs: auditSpecs(), sectionTexts: auditSectionTexts(), images: auditImages(), tracking: auditTracking(), scripts: auditScripts() };
       window.parent.postMessage({ type: 'AUDIT_RESULT', role: myRole, reqId: e.data.reqId, result }, '*');
       return;
     }
@@ -353,6 +353,36 @@
       }
     }
     return result;
+  }
+
+  function auditScripts() {
+    const own = location.hostname;
+    const scripts = [];
+    const seen = new Set();
+    document.querySelectorAll('script[src]').forEach(s => {
+      const src = s.src || '';
+      if (!src) return;
+      let host = '';
+      try { host = new URL(src).hostname; } catch (e) { return; }
+      const is3p = host && host !== own && !host.endsWith('.' + own);
+      const path = src.replace(/https?:\/\/[^/]+/, '');
+      const key = host + path.split('?')[0];
+      if (seen.has(key)) return;
+      seen.add(key);
+      // Categorize
+      let category = 'other';
+      if (/google|gtag|gtm|ga\.js|analytics/i.test(src)) category = 'analytics';
+      else if (/facebook|fbevents|fb\.js|meta\.com/i.test(src)) category = 'analytics';
+      else if (/kakao/i.test(src)) category = 'social';
+      else if (/naver|wcslog/i.test(src)) category = 'analytics';
+      else if (/hotjar|clarity|heatmap|mouseflow/i.test(src)) category = 'ux';
+      else if (/ad|doubleclick|adsense|criteo|taboola|outbrain/i.test(src)) category = 'ads';
+      else if (/chat|zendesk|intercom|channel\.io/i.test(src)) category = 'chat';
+      else if (/cdn|jquery|polyfill|lodash|moment|swiper|slick/i.test(src)) category = 'library';
+      else if (/tag|pixel|beacon|tracker/i.test(src)) category = 'analytics';
+      scripts.push({ src, host, path: path.split('?')[0], is3p, category, async: s.async, defer: s.defer });
+    });
+    return scripts;
   }
 
   // Scroll event - send ratio to parent

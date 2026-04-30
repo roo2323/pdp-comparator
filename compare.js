@@ -191,7 +191,7 @@ function runAudit(){
 }
 
 function clearAuditTabs(){
-  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes','deepRes','imagesRes','trackingRes'].forEach(id=>{
+  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes','deepRes','imagesRes','trackingRes','scriptsRes'].forEach(id=>{
     const el=$(id);if(el)el.innerHTML=id.endsWith('Res')?'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div>':'';
   });
   $('exportBar').style.display='none';
@@ -234,6 +234,7 @@ function renderFullAudit(a,t){
   renderDeepDiff(a,t);
   renderImagesDiff(a.images||[],t.images||[]);
   renderTrackingDiff(a.tracking||{},t.tracking||{});
+  renderScriptsDiff(a.scripts||[],t.scripts||[]);
   toast('감사 완료 — Critical '+crit+'건');
 }
 
@@ -614,6 +615,88 @@ function renderTrackKV(a,t){
     </div>`;
   });
   return html;
+}
+
+// ═══════════════════════ Scripts Diff ═══════════════════════
+function renderScriptsDiff(aScr,tScr){
+  const a3p=aScr.filter(s=>s.is3p),t3p=tScr.filter(s=>s.is3p);
+  const a1p=aScr.filter(s=>!s.is3p),t1p=tScr.filter(s=>!s.is3p);
+  const aHosts=new Set(a3p.map(s=>s.host)),tHosts=new Set(t3p.map(s=>s.host));
+  const bothH=[...aHosts].filter(h=>tHosts.has(h));
+  const onlyAH=[...aHosts].filter(h=>!tHosts.has(h));
+  const onlyTH=[...tHosts].filter(h=>!aHosts.has(h));
+
+  let html=`<div class="audit-section"><div class="audit-section-title">3rd Party 스크립트 비교</div>`;
+  html+=`<div style="font-size:10px;color:var(--muted);margin-bottom:8px">
+    AS-IS: 전체 <b>${aScr.length}</b>개 (3P <b>${a3p.length}</b>) / TO-BE: 전체 <b>${tScr.length}</b>개 (3P <b>${t3p.length}</b>)<br>
+    3P 도메인: 공통 <b>${bothH.length}</b> | <span style="color:var(--asis)">AS-IS only ${onlyAH.length}</span> | <span style="color:var(--tobe)">TO-BE only ${onlyTH.length}</span>
+  </div>`;
+
+  // 3P domain matrix
+  html+='<div class="matrix-row header"><div>도메인</div><div>AS-IS</div><div>TO-BE</div></div>';
+  const allH=[...new Set([...aHosts,...tHosts])].sort();
+  allH.forEach(h=>{
+    const aH=aHosts.has(h),tH=tHosts.has(h);
+    const cat=(a3p.find(s=>s.host===h)||t3p.find(s=>s.host===h))?.category||'other';
+    html+=`<div class="matrix-row">
+      <div class="matrix-label"><span class="script-cat cat-${cat}">${cat}</span> ${esc(h)}</div>
+      <div class="matrix-cell ${aH?'matrix-yes':'matrix-no'}">${aH?'✓':'✗'}</div>
+      <div class="matrix-cell ${tH?'matrix-yes':'matrix-no'}">${tH?'✓':'✗'}</div>
+    </div>`;
+  });
+  html+='</div>';
+
+  // Category summary
+  const cats=['analytics','ads','social','ux','chat','library','other'];
+  const aCatCnt={},tCatCnt={};
+  a3p.forEach(s=>{aCatCnt[s.category]=(aCatCnt[s.category]||0)+1;});
+  t3p.forEach(s=>{tCatCnt[s.category]=(tCatCnt[s.category]||0)+1;});
+  html+=`<div class="audit-section"><div class="audit-section-title">카테고리별 3P 스크립트 수</div>`;
+  html+='<div class="matrix-row header"><div>카테고리</div><div>AS-IS</div><div>TO-BE</div></div>';
+  cats.forEach(c=>{
+    const ac=aCatCnt[c]||0,tc=tCatCnt[c]||0;
+    if(!ac&&!tc) return;
+    html+=`<div class="matrix-row">
+      <div class="matrix-label"><span class="script-cat cat-${c}">${c}</span></div>
+      <div class="matrix-cell" style="color:var(--asis)">${ac}</div>
+      <div class="matrix-cell" style="color:var(--tobe)">${tc}</div>
+    </div>`;
+  });
+  html+='</div>';
+
+  // AS-IS only 3P detail
+  if(onlyAH.length){
+    html+=`<div class="audit-section"><div class="audit-section-title" style="color:var(--asis)">AS-IS only 3P (${onlyAH.length} 도메인)</div>`;
+    a3p.filter(s=>onlyAH.includes(s.host)).forEach(s=>{
+      html+=`<div class="script-row img-only-a">
+        <span class="script-cat cat-${s.category}">${s.category}</span>
+        <span class="script-host">${esc(s.host)}</span>
+        <span class="script-path" title="${esc(s.path)}">${esc(s.path.length>50?'…'+s.path.slice(-47):s.path)}</span>
+        <span class="script-flags">${s.async?'<span class="script-flag">async</span>':''}${s.defer?'<span class="script-flag">defer</span>':''}</span>
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  // TO-BE only 3P detail
+  if(onlyTH.length){
+    html+=`<div class="audit-section"><div class="audit-section-title" style="color:var(--tobe)">TO-BE only 3P (${onlyTH.length} 도메인)</div>`;
+    t3p.filter(s=>onlyTH.includes(s.host)).forEach(s=>{
+      html+=`<div class="script-row img-only-t">
+        <span class="script-cat cat-${s.category}">${s.category}</span>
+        <span class="script-host">${esc(s.host)}</span>
+        <span class="script-path" title="${esc(s.path)}">${esc(s.path.length>50?'…'+s.path.slice(-47):s.path)}</span>
+        <span class="script-flags">${s.async?'<span class="script-flag">async</span>':''}${s.defer?'<span class="script-flag">defer</span>':''}</span>
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  // 1P script count
+  html+=`<div class="audit-section"><div class="audit-section-title">1st Party 스크립트</div>`;
+  html+=`<div style="font-size:10px;color:var(--muted)">AS-IS <b>${a1p.length}</b>개 / TO-BE <b>${t1p.length}</b>개</div></div>`;
+
+  $('scriptsRes').innerHTML=html;
 }
 
 // ═══════════════════════ Deep Diff (2차) ═══════════════════════

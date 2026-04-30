@@ -6,7 +6,7 @@
 <title>LGE PDP Comparator</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-:root{--bg:#080b10;--surface:#0f1419;--surface2:#161d27;--border:#1e2a38;--accent:#6ee7b7;--accent2:#818cf8;--danger:#f87171;--warn:#fbbf24;--ok:#34d399;--text:#e2e8f0;--muted:#64748b;--asis:#38bdf8;--tobe:#a78bfa;--hh:54px;--th:36px;--pw:440px;--crit:#ef4444;--crit-bg:rgba(239,68,68,.12);--warn-bg:rgba(251,191,36,.12);--ok-bg:rgba(52,211,153,.12);}
+:root{--bg:#080b10;--surface:#0f1419;--surface2:#161d27;--border:#1e2a38;--accent:#6ee7b7;--accent2:#818cf8;--danger:#f87171;--warn:#fbbf24;--ok:#34d399;--text:#e2e8f0;--muted:#64748b;--asis:#38bdf8;--tobe:#a78bfa;--hh:54px;--th:36px;--pw:560px;--crit:#ef4444;--crit-bg:rgba(239,68,68,.12);--warn-bg:rgba(251,191,36,.12);--ok-bg:rgba(52,211,153,.12);}
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD Gothic Neo',system-ui,sans-serif;font-size:13px;}
 body{display:flex;flex-direction:column;}
 #hdr{height:var(--hh);min-height:var(--hh);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 16px;z-index:100;flex-shrink:0;}
@@ -126,6 +126,21 @@ body{display:flex;flex-direction:column;}
 .track-kv-key{padding:3px 6px;color:var(--muted);font-weight:600;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .track-kv-val{padding:3px 6px;border-radius:3px;font-family:monospace;word-break:break-all;line-height:1.3;}
 
+/* Script diff */
+.script-cat{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 5px;border-radius:3px;display:inline-block;}
+.cat-analytics{background:rgba(129,140,248,.15);color:#818cf8;}
+.cat-ads{background:rgba(248,113,113,.15);color:#f87171;}
+.cat-social{background:rgba(52,211,153,.15);color:#34d399;}
+.cat-ux{background:rgba(251,191,36,.15);color:#fbbf24;}
+.cat-chat{background:rgba(56,189,248,.15);color:#38bdf8;}
+.cat-library{background:rgba(148,163,184,.15);color:#94a3b8;}
+.cat-other{background:var(--surface2);color:var(--muted);}
+.script-row{font-size:9px;padding:4px 6px;margin-bottom:2px;border-radius:4px;display:flex;align-items:center;gap:6px;font-family:monospace;}
+.script-host{font-weight:700;min-width:100px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.script-path{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);}
+.script-flags{display:flex;gap:3px;flex-shrink:0;}
+.script-flag{font-size:8px;padding:1px 4px;border-radius:2px;background:var(--surface2);color:var(--muted);}
+
 /* Word diff */
 .wdiff{font-size:10px;line-height:1.6;padding:8px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);margin-bottom:6px;word-break:break-all;max-height:150px;overflow-y:auto;}
 .wdiff-add{background:rgba(52,211,153,.2);color:var(--ok);padding:0 2px;border-radius:2px;}
@@ -234,6 +249,7 @@ body{display:flex;flex-direction:column;}
       <div class="ptab" data-tab="media">미디어</div>
       <div class="ptab" data-tab="images">이미지</div>
       <div class="ptab" data-tab="tracking">트래킹</div>
+      <div class="ptab" data-tab="scripts">스크립트</div>
       <div class="ptab" data-tab="deep">Deep Diff</div>
       <div class="ptab" data-tab="diff">DOM</div>
       <div class="ptab" data-tab="perf">성능</div>
@@ -263,6 +279,8 @@ body{display:flex;flex-direction:column;}
     <div class="pbody" id="tab-images"><div id="imagesRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- 트래킹 -->
     <div class="pbody" id="tab-tracking"><div id="trackingRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
+    <!-- 3rd Party Scripts -->
+    <div class="pbody" id="tab-scripts"><div id="scriptsRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- Deep Diff -->
     <div class="pbody" id="tab-deep"><div id="deepRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- DOM 비교 (existing) -->
