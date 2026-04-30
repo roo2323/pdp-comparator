@@ -1,6 +1,6 @@
 const $=id=>document.getElementById(id);
 
-// === 공통 셀렉터 ===
+// ═══════════════════════ DOM Comparison Selectors (existing) ═══════════════════════
 const COMMON=[
   {key:"제품명",asis:".product-name h2.name,.product-name h1.name,.product-name .name",tobe:"[class*='product_name_title_area']"},
   {key:"모델번호",asis:"button.sku.copy",tobe:"[class*='button_copy'] > span:first-child"},
@@ -11,8 +11,6 @@ const COMMON=[
   {key:"배송 일정",asis:".delivery-wrap .info-text",tobe:"[class*='delivery_info_content'] dd"},
   {key:"플래그/뱃지",asis:".flag-wrap.bar-type .flag",tobe:"[class*='gallery_badge_top'] span,[class*='badge_text'] span",all:true},
 ];
-
-// === 일시불 전용 ===
 const DS_PURCHASE=[
   ...COMMON,
   {key:"판매가",asis:".price-detail-item .price-info .content .price",tobe:"[class*='pricing_info_item'] [class*='price_text']"},
@@ -25,8 +23,6 @@ const DS_PURCHASE=[
   {key:"혜택-간편결제",asis:".buy-benefit-info ul > li",tobe:"[class*='benefits_purchase_list'] > li",textFilter:"간편결제"},
   {key:"핵심 스펙",asis:"li.lists.laptap-opt .opt-info-list .tit,li.lists.Spec .btn-area span,button.sibling-spec .spec-cont",tobe:"[class*='notebook_options_basic'] dt",all:true},
 ];
-
-// === 구독 전용 ===
 const DS_SUBSCRIPTION=[
   ...COMMON,
   {key:"월 이용요금",asis:".select-info.price-info.total .price-won,.tabs-price",tobe:"[class*='pricing_info_subscribe'] [class*='price_text']"},
@@ -41,11 +37,7 @@ const DS_SUBSCRIPTION=[
   {key:"핵심 스펙",asis:"button.sibling-spec .spec-cont,li.lists.Spec .btn-area span",tobe:"[class*='options_wrap'] [class*='options_selected']"},
   {key:"총요금",asis:".total-price-info .price,.rental-total .price",tobe:"[class*='rental_total_payment']"},
 ];
-
-// Active selector set
 function getDS(){return $('pdpTypeSelect').value==='SUBSCRIPTION'?DS_SUBSCRIPTION:DS_PURCHASE;}
-
-// Post-processing transforms by key
 const TX={
   "모델번호": t=>t.replace(/모델명\s*복사|모델번호\s*복사/g,'').trim(),
   "판매가": t=>(t.match(/[\d,]+/)||[t])[0],
@@ -64,39 +56,22 @@ const TX={
     return cleaned;
   },
 };
+function applyTx(results){const out={};for(const k in results){let v=results[k];if(v&&TX[k])v=TX[k](v);out[k]=v;}return out;}
 
-function applyTx(results){
-  const out={};
-  for(const k in results){
-    let v=results[k];
-    if(v&&TX[k]) v=TX[k](v);
-    out[k]=v;
-  }
-  return out;
-}
-
+// ═══════════════════════ State ═══════════════════════
 let sel=[],sync=true,aR=false,tR=false,cApi=null,pOpen=true,bSF=null,pRes={},rId=0,mobileOn=false,perfData={};
+let auditRes={},auditId=0,lastAudit=null;
 
-function refreshSel(){
-  sel=getDS();
-  $('selCfg').value=JSON.stringify(sel,null,2);
-}
-
+// ═══════════════════════ Init ═══════════════════════
+function refreshSel(){sel=getDS();$('selCfg').value=JSON.stringify(sel,null,2);}
 function init(){
   $('asisUrl').value=localStorage.getItem('pdp-au')||'';
   $('tobeUrl').value=localStorage.getItem('pdp-tu')||'';
   $('modelInput').value=localStorage.getItem('pdp-m')||'';
   $('pdpTypeSelect').value=localStorage.getItem('pdp-type')||'PURCHASE';
-  refreshSel();
-  bind();
-  // Default to mobile mode on first load
-  if(!localStorage.getItem('pdp-mobile-init')){
-    localStorage.setItem('pdp-mobile-init','1');
-    toggleMobile(true);
-  } else {
-    const cb=$('mobileMode');
-    if(cb.checked) toggleMobile(true);
-  }
+  refreshSel();bind();
+  if(!localStorage.getItem('pdp-mobile-init')){localStorage.setItem('pdp-mobile-init','1');toggleMobile(true);}
+  else{if($('mobileMode').checked)toggleMobile(true);}
 }
 function bind(){
   $('loadBtn').onclick=load;
@@ -105,6 +80,7 @@ function bind(){
   $('syncScroll').onchange=e=>{sync=e.target.checked;};
   $('mobileMode').onchange=e=>{toggleMobile(e.target.checked);};
   $('runDiff').onclick=runDiff;
+  $('runAudit').onclick=runAudit;
   $('saveCfg').onclick=()=>{try{sel=JSON.parse($('selCfg').value);localStorage.setItem('pdp-sel',JSON.stringify(sel));toast('저장 완료');}catch(e){toast('JSON 오류: '+e.message);}};
   $('panelBtn').onclick=()=>{pOpen=!pOpen;$('sp').classList.toggle('collapsed',!pOpen);$('panelBtn').textContent=pOpen?'\u25B6 비교 패널':'\u25C0 비교 패널';};
   document.querySelectorAll('.ptab').forEach(t=>t.onclick=()=>{
@@ -117,64 +93,42 @@ function bind(){
   $('asisUrl').onchange=()=>localStorage.setItem('pdp-au',$('asisUrl').value);
   $('tobeUrl').onchange=()=>localStorage.setItem('pdp-tu',$('tobeUrl').value);
   $('pdpTypeSelect').onchange=()=>{localStorage.setItem('pdp-type',$('pdpTypeSelect').value);refreshSel();};
+  $('exportJSON').onclick=()=>exportData('json');
+  $('exportCSV').onclick=()=>exportData('csv');
+  $('exportHTML').onclick=()=>exportData('html');
   initDiv();
 }
+
 const BASE='https://wwwdev50.lge.co.kr';
 const API_BASE='http://localhost:18093';
 
+// ═══════════════════════ Page Load ═══════════════════════
 function load(){
   const m=$('modelInput').value.trim();
   if(!m){toast('모델 ID를 입력해주세요');return;}
   localStorage.setItem('pdp-m',m);
   const pdpType=$('pdpTypeSelect').value;
-  localStorage.setItem('pdp-type',pdpType);
-  refreshSel();
-
-  // Reset state
+  localStorage.setItem('pdp-type',pdpType);refreshSel();
   $('dres').innerHTML='';$('dsum').style.display='none';
-  $('apiCont').style.display='none';$('apiSt').style.display='block';
-  $('apiSt').textContent='로딩 중... API 대기 중';cApi=null;aR=false;tR=false;
-  perfData={};$('perfSt').textContent='페이지 로드 완료 후 자동 측정됩니다';$('perfRes').innerHTML='';
-
-  // Fetch URL from purchase-type API
+  $('apiCont').style.display='none';$('apiSt').style.display='block';$('apiSt').textContent='로딩 중... API 대기 중';
+  cApi=null;aR=false;tR=false;perfData={};auditRes={};lastAudit=null;
+  $('perfSt').textContent='페이지 로드 완료 후 자동 측정됩니다';$('perfRes').innerHTML='';
+  clearAuditTabs();
   toast('URL 조회 중...');
   fetch(API_BASE+'/api/v1/models/'+m+'/purchase-type')
-    .then(r=>r.json())
-    .then(res=>{
-      const d=res.data;
-      let asisPath,tobeUrl;
-      if(pdpType==='SUBSCRIPTION'&&d.subscription&&d.subscription.url){
-        asisPath=d.subscription.url;
-        // TO-BE 구독: /model?modelId={modelId}&pdpType=SUBSCRIPTION
-        tobeUrl=BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION';
-      } else if(d.purchase&&d.purchase.url){
-        asisPath=d.purchase.url;
-        // TO-BE 일시불: /model?modelId={modelId}
-        tobeUrl=BASE+'/model?modelId='+m;
-      } else {
-        toast('URL을 찾을 수 없습니다');return;
-      }
-      const asisUrl=BASE+asisPath;
-
-      // Update URL display
-      $('asisUrl').value=asisUrl;
-      $('tobeUrl').value=tobeUrl;
+    .then(r=>r.json()).then(res=>{
+      const d=res.data;let asisPath,tobeUrl;
+      if(pdpType==='SUBSCRIPTION'&&d.subscription&&d.subscription.url){asisPath=d.subscription.url;tobeUrl=BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION';}
+      else if(d.purchase&&d.purchase.url){asisPath=d.purchase.url;tobeUrl=BASE+'/model?modelId='+m;}
+      else{toast('URL을 찾을 수 없습니다');return;}
+      $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
       $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
       fs('asis','loading');fs('tobe','loading');
-      $('asisF').src=asisUrl;
-      $('tobeF').src=tobeUrl;
+      $('asisF').src=BASE+asisPath;$('tobeF').src=tobeUrl;
       toast('URL 자동 설정 완료');
-    })
-    .catch(e=>{
-      toast('API 오류 — URL을 직접 입력해주세요');
-      console.error('purchase-type API error:',e);
-    });
+    }).catch(e=>{toast('API 오류 — URL을 직접 입력해주세요');console.error(e);});
 }
-function fs(s,st){
-  const d=$(s+'D'),t=$(s+'St'),o=$(s+'Ov');
-  d.className='dot '+st;t.textContent=st==='loading'?'로딩 중...':st==='ready'?'준비됨':'오류';
-  o.classList.toggle('show',st==='loading');
-}
+function fs(s,st){const d=$(s+'D'),t=$(s+'St'),o=$(s+'Ov');d.className='dot '+st;t.textContent=st==='loading'?'로딩 중...':st==='ready'?'준비됨':'오류';o.classList.toggle('show',st==='loading');}
 function fl(s){
   fs(s,'ready');if(s==='asis')aR=true;else tR=true;
   const f=$(s+'F');
@@ -183,42 +137,384 @@ function fl(s){
   setTimeout(()=>{f.contentWindow?.postMessage({type:'SET_ROLE',role:s},'*');},1500);
   toast((s==='asis'?'AS-IS':'TO-BE')+' 로드 완료');
 }
+
+// ═══════════════════════ Message Handler ═══════════════════════
 function onMsg(e){
   if(!e.data)return;
   if(e.data.type==='SCROLL_FROM_IFRAME'&&sync){
-    const{role:r,scrollRatio:sr}=e.data;
-    if(bSF===r)return;
-    const tf=r==='asis'?$('tobeF'):$('asisF');
-    bSF=r==='asis'?'tobe':'asis';
+    const{role:r,scrollRatio:sr}=e.data;if(bSF===r)return;
+    const tf=r==='asis'?$('tobeF'):$('asisF');bSF=r==='asis'?'tobe':'asis';
     tf.contentWindow?.postMessage({type:'SCROLL_TO_RATIO',ratio:sr},'*');
     clearTimeout(window._su);window._su=setTimeout(()=>{bSF=null;},50);
   }
   if(e.data.type==='DOM_EXTRACT_RESULT'){
     if(e.data.reqId!==rId)return;
-    // Apply post-processing transforms
     pRes[e.data.role]=applyTx(e.data.result);
     if(pRes.asis&&pRes.tobe){renderDiff(pRes.asis,pRes.tobe);$('runDiff').textContent='\u25B6 DOM 비교 실행';$('runDiff').disabled=false;}
   }
+  if(e.data.type==='AUDIT_RESULT'){
+    if(e.data.reqId!==auditId)return;
+    auditRes[e.data.role]=e.data.result;
+    if(auditRes.asis&&auditRes.tobe){
+      lastAudit={asis:auditRes.asis,tobe:auditRes.tobe,time:new Date().toISOString()};
+      renderFullAudit(auditRes.asis,auditRes.tobe);
+      $('runAudit').textContent='\u25B6 전체 감사 실행';$('runAudit').disabled=false;
+    }
+  }
   if(e.data.type==='PERF_DATA'){
     perfData[e.data.role]=e.data.data;
-    if(perfData.asis&&perfData.tobe) renderPerf(perfData.asis,perfData.tobe);
+    if(perfData.asis&&perfData.tobe)renderPerf(perfData.asis,perfData.tobe);
     else $('perfSt').textContent=(perfData.asis?'AS-IS':'TO-BE')+' 측정 완료, 나머지 대기 중...';
   }
   if(e.data.type==='API_CAPTURED'){
     cApi=e.data;$('apiSt').style.display='none';$('apiCont').style.display='block';
-    $('apiUrl').textContent=e.data.url;$('apiJson').textContent=JSON.stringify(e.data.data,null,2);
-    toast('API 응답 캡처됨');
+    $('apiUrl').textContent=e.data.url;$('apiJson').textContent=JSON.stringify(e.data.data,null,2);toast('API 응답 캡처됨');
   }
 }
+
+// ═══════════════════════ Audit ═══════════════════════
+function runAudit(){
+  if(!aR&&!tR){toast('먼저 페이지를 로드해주세요');return;}
+  auditId=Date.now();auditRes={};
+  $('runAudit').textContent='\u23F3 감사 중...';$('runAudit').disabled=true;
+  $('asisF').contentWindow?.postMessage({type:'AUDIT_REQUEST',reqId:auditId},'*');
+  $('tobeF').contentWindow?.postMessage({type:'AUDIT_REQUEST',reqId:auditId},'*');
+  setTimeout(()=>{
+    if(!auditRes.asis||!auditRes.tobe){
+      $('auditOverview').innerHTML='<div style="color:var(--warn);font-size:11px;padding:10px;background:var(--surface2);border-radius:6px">\u26A0\uFE0F Cross-Origin 제한으로 추출 차단됨</div>';
+      $('runAudit').textContent='\u25B6 전체 감사 실행';$('runAudit').disabled=false;
+    }
+  },5000);
+}
+
+function clearAuditTabs(){
+  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes'].forEach(id=>{
+    const el=$(id);if(el)el.innerHTML=id.endsWith('Res')?'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div>':'';
+  });
+  $('exportBar').style.display='none';
+}
+
+function renderFullAudit(a,t){
+  const seo=buildSEOItems(a.seo,t.seo);
+  const ld=buildJSONLDItems(a.jsonld,t.jsonld);
+  const sec=buildSectionItems(a.sections,t.sections);
+  const med=buildMediaItems(a.media,t.media);
+  const all=[...seo,...ld,...sec,...med];
+  const crit=all.filter(i=>i.sev==='crit').length;
+  const warn=all.filter(i=>i.sev==='warn').length;
+  const ok=all.filter(i=>i.sev==='ok').length;
+
+  // Summary cards
+  $('auditSummary').innerHTML=`
+    <div class="sev-cards">
+      <div class="sev-card sev-crit"><div class="num">${crit}</div><div class="lbl">Critical</div></div>
+      <div class="sev-card sev-warn"><div class="num">${warn}</div><div class="lbl">Warning</div></div>
+      <div class="sev-card sev-ok"><div class="num">${ok}</div><div class="lbl">OK</div></div>
+    </div>`;
+
+  // Overview: top critical items
+  const critItems=all.filter(i=>i.sev==='crit');
+  let ovHtml='';
+  if(critItems.length){
+    ovHtml+='<div class="audit-section"><div class="audit-section-title">\u{1F6A8} Critical Issues ('+critItems.length+')</div>';
+    critItems.forEach(i=>{ovHtml+=`<div style="font-size:10px;padding:4px 0;color:var(--danger)">\u2022 <b>${i.group}</b> — ${i.key}: ${i.detail||'TO-BE 누락'}</div>`;});
+    ovHtml+='</div>';
+  }
+  $('auditOverview').innerHTML=ovHtml;
+  $('exportBar').style.display='flex';
+
+  // Render each tab
+  renderSEOTab(a.seo,t.seo,seo);
+  renderJSONLDTab(a.jsonld,t.jsonld,ld);
+  renderSectionsTab(a.sections,t.sections,sec);
+  renderMediaTab(a.media,t.media,med);
+  toast('감사 완료 — Critical '+crit+'건');
+}
+
+// ─── SEO ───
+const SEO_FIELDS=[
+  {key:'title',label:'title',sev:'crit'},
+  {key:'titleLength',label:'title 길이',type:'info'},
+  {key:'metaDescription',label:'meta description',sev:'crit'},
+  {key:'metaDescLength',label:'description 길이',type:'info'},
+  {key:'canonical',label:'canonical',sev:'crit'},
+  {key:'robots',label:'robots',sev:'warn'},
+  {key:'og:title',og:true,label:'og:title',sev:'crit'},
+  {key:'og:description',og:true,label:'og:description',sev:'crit'},
+  {key:'og:image',og:true,label:'og:image',sev:'crit'},
+  {key:'og:url',og:true,label:'og:url',sev:'crit'},
+  {key:'og:type',og:true,label:'og:type',sev:'warn'},
+  {key:'og:site_name',og:true,label:'og:site_name',sev:'warn'},
+  {key:'og:locale',og:true,label:'og:locale',sev:'warn'},
+  {key:'twitter:card',tw:true,label:'twitter:card',sev:'warn'},
+  {key:'twitter:title',tw:true,label:'twitter:title',sev:'warn'},
+  {key:'hreflangs',label:'hreflang',sev:'warn',type:'count'},
+  {key:'favicon',label:'favicon',sev:'warn'},
+];
+
+function getVal(seo,f){
+  if(f.og) return seo.og?.['og:'+f.key.split(':')[1]]||null;
+  if(f.tw) return seo.twitter?.[f.key]||null;
+  if(f.type==='count') return seo[f.key]?.length??0;
+  return seo[f.key]??null;
+}
+
+function buildSEOItems(a,t){
+  return SEO_FIELDS.filter(f=>f.sev).map(f=>{
+    const av=getVal(a,f),tv=getVal(t,f);
+    const aHas=av!==null&&av!==''&&av!==0;
+    const tHas=tv!==null&&tv!==''&&tv!==0;
+    let sev='ok';
+    if(aHas&&!tHas) sev=f.sev; // AS-IS has it, TO-BE missing
+    else if(!aHas&&!tHas) sev='na';
+    return{group:'SEO',key:f.label,sev,av:fmtVal(av),tv:fmtVal(tv),detail:aHas&&!tHas?'TO-BE 누락':null};
+  });
+}
+
+function renderSEOTab(a,t,items){
+  let html='<div class="audit-row header"><div>항목</div><div>AS-IS</div><div>TO-BE</div><div>상태</div></div>';
+  SEO_FIELDS.forEach(f=>{
+    const av=getVal(a,f),tv=getVal(t,f);
+    const aHas=av!==null&&av!==''&&av!==0;
+    const tHas=tv!==null&&tv!==''&&tv!==0;
+    let sev=f.type==='info'?'na':(!aHas&&!tHas?'na':aHas&&!tHas?f.sev:aHas&&tHas&&av===tv?'ok':'warn');
+    if(!f.sev&&f.type==='info') sev='na';
+    html+=`<div class="audit-row">
+      <div class="audit-key">${f.label}</div>
+      <div class="audit-val asis-v"><span class="trunc">${fmtVal(av)}</span></div>
+      <div class="audit-val tobe-v"><span class="trunc">${fmtVal(tv)}</span></div>
+      <div class="audit-badge badge-${sev}">${sevLabel(sev)}</div>
+    </div>`;
+  });
+  $('seoRes').innerHTML=html;
+}
+
+// ─── JSON-LD ───
+const LD_PRODUCT_FIELDS=['name','sku','brand','image','description','offersPrice','offersCurrency','offersAvailability','ratingValue','reviewCount'];
+
+function buildJSONLDItems(aList,tList){
+  const items=[];
+  const aTypes=new Set(aList.map(i=>i.type));
+  const tTypes=new Set(tList.map(i=>i.type));
+  const allTypes=new Set([...aTypes,...tTypes]);
+  allTypes.forEach(type=>{
+    const aHas=aTypes.has(type),tHas=tTypes.has(type);
+    let sev='ok';
+    if(aHas&&!tHas) sev=(type==='Product'||type==='BreadcrumbList')?'crit':'warn';
+    else if(!aHas&&tHas) sev='ok';
+    items.push({group:'JSON-LD',key:'@type: '+type,sev,detail:aHas&&!tHas?'TO-BE 누락':null});
+    if(type==='Product'){
+      const aP=aList.find(i=>i.type==='Product')||{};
+      const tP=tList.find(i=>i.type==='Product')||{};
+      LD_PRODUCT_FIELDS.forEach(f=>{
+        const av=aP[f],tv=tP[f];
+        const aH=av!==null&&av!==undefined&&av!==false;
+        const tH=tv!==null&&tv!==undefined&&tv!==false;
+        if(aH&&!tH) items.push({group:'JSON-LD',key:'Product.'+f,sev:'crit',detail:'TO-BE 누락'});
+      });
+    }
+  });
+  return items;
+}
+
+function renderJSONLDTab(aList,tList){
+  const aTypes=new Set(aList.map(i=>i.type));
+  const tTypes=new Set(tList.map(i=>i.type));
+  const allTypes=[...new Set([...aTypes,...tTypes])];
+
+  let html='<div class="audit-section"><div class="audit-section-title">@type 비교</div>';
+  html+='<div class="matrix-row header"><div>Type</div><div>AS-IS</div><div>TO-BE</div></div>';
+  allTypes.forEach(type=>{
+    const aH=aTypes.has(type),tH=tTypes.has(type);
+    html+=`<div class="matrix-row">
+      <div class="matrix-label">${type}</div>
+      <div class="matrix-cell ${aH?'matrix-yes':'matrix-no'}">${aH?'✓':'✗'}</div>
+      <div class="matrix-cell ${tH?'matrix-yes':'matrix-no'}">${tH?'✓':'✗'}</div>
+    </div>`;
+  });
+  html+='</div>';
+
+  // Product detail comparison
+  const aP=aList.find(i=>i.type==='Product');
+  const tP=tList.find(i=>i.type==='Product');
+  if(aP||tP){
+    html+='<div class="audit-section"><div class="audit-section-title">Product 상세</div>';
+    html+='<div class="audit-row header"><div>필드</div><div>AS-IS</div><div>TO-BE</div><div>상태</div></div>';
+    LD_PRODUCT_FIELDS.forEach(f=>{
+      const av=(aP||{})[f],tv=(tP||{})[f];
+      const aH=av!==null&&av!==undefined&&av!==false;
+      const tH=tv!==null&&tv!==undefined&&tv!==false;
+      const sev=aH&&!tH?'crit':!aH&&!tH?'na':'ok';
+      html+=`<div class="audit-row">
+        <div class="audit-key">${f}</div>
+        <div class="audit-val asis-v"><span class="trunc">${fmtVal(av)}</span></div>
+        <div class="audit-val tobe-v"><span class="trunc">${fmtVal(tv)}</span></div>
+        <div class="audit-badge badge-${sev}">${sevLabel(sev)}</div>
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  // BreadcrumbList
+  const aB=aList.find(i=>i.type==='BreadcrumbList');
+  const tB=tList.find(i=>i.type==='BreadcrumbList');
+  if(aB||tB){
+    html+='<div class="audit-section"><div class="audit-section-title">BreadcrumbList</div>';
+    html+=`<div style="font-size:10px;margin-bottom:4px;color:var(--asis)">AS-IS (${(aB?.itemCount)||0}): ${(aB?.items||[]).join(' > ')||'없음'}</div>`;
+    html+=`<div style="font-size:10px;color:var(--tobe)">TO-BE (${(tB?.itemCount)||0}): ${(tB?.items||[]).join(' > ')||'없음'}</div>`;
+    html+='</div>';
+  }
+
+  $('jsonldRes').innerHTML=html;
+}
+
+// ─── Sections ───
+function buildSectionItems(aSecs,tSecs){
+  const items=[];
+  const aMap=new Map();aSecs.forEach(s=>{if(s.title)aMap.set(normTitle(s.title),s);});
+  const tMap=new Map();tSecs.forEach(s=>{if(s.title)tMap.set(normTitle(s.title),s);});
+  const allKeys=[...new Set([...aMap.keys(),...tMap.keys()])];
+  allKeys.forEach(k=>{
+    const aH=aMap.has(k),tH=tMap.has(k);
+    const sev=aH&&!tH?'crit':!aH&&tH?'ok':'ok';
+    items.push({group:'섹션',key:aMap.get(k)?.title||tMap.get(k)?.title||k,sev,detail:aH&&!tH?'TO-BE 누락':null});
+  });
+  return items;
+}
+
+function normTitle(t){return t.replace(/\s+/g,' ').trim().toLowerCase();}
+
+function renderSectionsTab(aSecs,tSecs){
+  const aMap=new Map();aSecs.forEach(s=>{if(s.title)aMap.set(normTitle(s.title),s);});
+  const tMap=new Map();tSecs.forEach(s=>{if(s.title)tMap.set(normTitle(s.title),s);});
+  const allKeys=[...new Set([...aMap.keys(),...tMap.keys()])];
+
+  let html=`<div class="audit-section"><div class="audit-section-title">콘텐츠 섹션 매핑 (${allKeys.length}개)</div>`;
+  html+='<div class="matrix-row header"><div>섹션명</div><div>AS-IS</div><div>TO-BE</div></div>';
+  allKeys.forEach(k=>{
+    const aH=aMap.has(k),tH=tMap.has(k);
+    const title=aMap.get(k)?.title||tMap.get(k)?.title||k;
+    html+=`<div class="matrix-row">
+      <div class="matrix-label" title="${esc(title)}">${esc(title)}</div>
+      <div class="matrix-cell ${aH?'matrix-yes':'matrix-no'}">${aH?'✓':'✗'}</div>
+      <div class="matrix-cell ${tH?'matrix-yes':'matrix-no'}">${tH?'✓':'✗'}</div>
+    </div>`;
+  });
+  html+='</div>';
+
+  // Detail: AS-IS only sections
+  const asisOnly=allKeys.filter(k=>aMap.has(k)&&!tMap.has(k));
+  if(asisOnly.length){
+    html+=`<div class="audit-section"><div class="audit-section-title" style="color:var(--danger)">\u{1F6A8} TO-BE 누락 섹션 (${asisOnly.length})</div>`;
+    asisOnly.forEach(k=>{
+      const s=aMap.get(k);
+      html+=`<div style="font-size:10px;padding:3px 0;color:var(--danger)">\u2022 ${esc(s.title)} ${s.id?'<span style="color:var(--muted)">#'+s.id+'</span>':''} (이미지 ${s.imageCount}장)</div>`;
+    });
+    html+='</div>';
+  }
+
+  // TO-BE only sections
+  const tobeOnly=allKeys.filter(k=>!aMap.has(k)&&tMap.has(k));
+  if(tobeOnly.length){
+    html+=`<div class="audit-section"><div class="audit-section-title" style="color:var(--ok)">TO-BE 신규 섹션 (${tobeOnly.length})</div>`;
+    tobeOnly.forEach(k=>{
+      const s=tMap.get(k);
+      html+=`<div style="font-size:10px;padding:3px 0;color:var(--ok)">\u2022 ${esc(s.title)}</div>`;
+    });
+    html+='</div>';
+  }
+
+  $('sectionsRes').innerHTML=html;
+}
+
+// ─── Media ───
+function buildMediaItems(a,t){
+  const items=[];
+  if(t.altMissingRate>50) items.push({group:'미디어',key:'alt 누락률',sev:'crit',detail:t.altMissingRate+'%'});
+  else if(t.altMissingRate>20) items.push({group:'미디어',key:'alt 누락률',sev:'warn',detail:t.altMissingRate+'%'});
+  else items.push({group:'미디어',key:'alt 누락률',sev:'ok'});
+  if(t.lazyLoadRate<30&&t.totalImages>10) items.push({group:'미디어',key:'lazy-load 비율',sev:'warn',detail:t.lazyLoadRate+'%'});
+  return items;
+}
+
+function renderMediaTab(a,t){
+  const rows=[
+    {label:'이미지 총 개수',av:a.totalImages+'장',tv:t.totalImages+'장'},
+    {label:'alt 누락',av:a.altMissing+'장 ('+a.altMissingRate+'%)',tv:t.altMissing+'장 ('+t.altMissingRate+'%)',sev:t.altMissingRate>50?'crit':t.altMissingRate>20?'warn':'ok'},
+    {label:'동영상 수',av:a.videoCount+'개',tv:t.videoCount+'개'},
+    {label:'갤러리 썸네일',av:a.galleryThumbnails+'장',tv:t.galleryThumbnails+'장'},
+    {label:'lazy-load 적용',av:a.lazyLoadCount+'장 ('+a.lazyLoadRate+'%)',tv:t.lazyLoadCount+'장 ('+t.lazyLoadRate+'%)',sev:t.lazyLoadRate<30&&t.totalImages>10?'warn':'ok'},
+  ];
+  let html='<div class="audit-section"><div class="audit-section-title">미디어 · 접근성</div>';
+  html+='<div class="audit-row header"><div>항목</div><div>AS-IS</div><div>TO-BE</div><div>상태</div></div>';
+  rows.forEach(r=>{
+    html+=`<div class="audit-row">
+      <div class="audit-key">${r.label}</div>
+      <div class="audit-val asis-v">${r.av}</div>
+      <div class="audit-val tobe-v">${r.tv}</div>
+      <div class="audit-badge badge-${r.sev||'na'}">${sevLabel(r.sev||'na')}</div>
+    </div>`;
+  });
+  html+='</div>';
+  $('mediaRes').innerHTML=html;
+}
+
+// ─── Helpers ───
+function fmtVal(v){
+  if(v===null||v===undefined) return '<span class="nv">없음</span>';
+  if(typeof v==='boolean') return v?'✓':'✗';
+  if(typeof v==='number') return String(v);
+  const s=String(v);
+  return s.length>60?esc(s.substring(0,57))+'…':esc(s);
+}
+function sevLabel(s){return{crit:'CRIT',warn:'WARN',ok:'OK',na:'-'}[s]||'-';}
+function esc(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ─── Export ───
+function exportData(fmt){
+  if(!lastAudit){toast('감사를 먼저 실행해주세요');return;}
+  const model=$('modelInput').value||'unknown';
+  if(fmt==='json'){
+    dl(JSON.stringify(lastAudit,null,2),'audit-'+model+'.json','application/json');
+  }else if(fmt==='csv'){
+    const seo=buildSEOItems(lastAudit.asis.seo,lastAudit.tobe.seo);
+    const ld=buildJSONLDItems(lastAudit.asis.jsonld,lastAudit.tobe.jsonld);
+    const sec=buildSectionItems(lastAudit.asis.sections,lastAudit.tobe.sections);
+    const all=[...seo,...ld,...sec];
+    let csv='Group,Key,Severity,Detail\n';
+    all.forEach(i=>{csv+=`"${i.group}","${i.key}","${i.sev}","${i.detail||''}"\n`;});
+    dl(csv,'audit-'+model+'.csv','text/csv');
+  }else if(fmt==='html'){
+    const body=$('sp').innerHTML;
+    const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>PDP Audit - ${model}</title>
+<style>body{font-family:system-ui;background:#0f1419;color:#e2e8f0;padding:20px;font-size:12px;}
+.sev-cards{display:flex;gap:10px;margin-bottom:20px;}
+.sev-card{flex:1;text-align:center;padding:15px;border-radius:8px;font-weight:700;}
+.sev-crit{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3);}
+.sev-warn{background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3);}
+.sev-ok{background:rgba(52,211,153,.15);color:#34d399;border:1px solid rgba(52,211,153,.3);}
+.num{font-size:28px;}.lbl{font-size:10px;text-transform:uppercase;margin-top:4px;}
+</style></head><body><h1>PDP Audit Report: ${model}</h1><p>Generated: ${new Date().toLocaleString()}</p><hr>
+${$('auditSummary').innerHTML}${$('seoRes').innerHTML}${$('jsonldRes').innerHTML}${$('sectionsRes').innerHTML}${$('mediaRes').innerHTML}
+</body></html>`;
+    dl(html,'audit-'+model+'.html','text/html');
+  }
+  toast(fmt.toUpperCase()+' 다운로드 완료');
+}
+function dl(content,filename,type){
+  const blob=new Blob([content],{type});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();URL.revokeObjectURL(a.href);
+}
+
+// ═══════════════════════ DOM Diff (existing) ═══════════════════════
 function runDiff(){
   if(!aR&&!tR){toast('먼저 페이지를 로드해주세요');return;}
   rId=Date.now();pRes={};
-  // Send selectors with all/textFilter metadata
   $('asisF').contentWindow?.postMessage({type:'DOM_EXTRACT_REQUEST',selectors:sel.map(s=>({key:s.key,selector:s.asis,all:s.all||false,textFilter:s.textFilter||''})),reqId:rId},'*');
   $('tobeF').contentWindow?.postMessage({type:'DOM_EXTRACT_REQUEST',selectors:sel.map(s=>({key:s.key,selector:s.tobe,all:s.all||false,textFilter:s.textFilter||''})),reqId:rId},'*');
   $('runDiff').textContent='\u23F3 추출 중...';$('runDiff').disabled=true;
   setTimeout(()=>{
-    if(Object.keys(pRes).length<2){$('dres').innerHTML='<div style="color:var(--warn);font-size:11px;padding:10px;background:var(--surface2);border-radius:6px">\u26A0\uFE0F Cross-Origin 제한으로 DOM 접근 차단됨<br><br>동일 도메인 URL 또는 CORS 헤더 추가 필요</div>';}
+    if(Object.keys(pRes).length<2){$('dres').innerHTML='<div style="color:var(--warn);font-size:11px;padding:10px;background:var(--surface2);border-radius:6px">\u26A0\uFE0F Cross-Origin 제한으로 DOM 접근 차단됨</div>';}
     $('runDiff').textContent='\u25B6 DOM 비교 실행';$('runDiff').disabled=false;
   },3000);
 }
@@ -237,22 +533,11 @@ function renderDiff(a,t){
     const rc=r.st==='ok'?'':r.st==='mismatch'?'mismatch':'missing';
     return '<div class="drow '+rc+'"><div class="dkey"><span>'+ic+'</span>'+r.key+'</div><div class="dvals"><div class="dval asis">'+(r.av||'<span class="nv">미추출</span>')+'</div><div class="dval tobe">'+(r.tv||'<span class="nv">미추출</span>')+'</div></div></div>';
   }).join('');
-  if(d>0&&cApi)toast(d+'건 불일치 \u2014 API 탭 확인');
 }
-function initDiv(){
-  const dv=$('divider'),ap=$('asisPW'),tp=$('tobePW');let drag=false;
-  dv.onmousedown=e=>{drag=true;dv.classList.add('dragging');e.preventDefault();};
-  document.onmousemove=e=>{
-    if(!drag)return;
-    const r=$('main').getBoundingClientRect();
-    const c=Math.max(.2,Math.min(.8,(e.clientX-r.left)/r.width));
-    ap.style.flex='none';ap.style.width=(c*100)+'%';tp.style.flex='1';
-  };
-  document.onmouseup=()=>{drag=false;dv.classList.remove('dragging');};
-}
+
+// ═══════════════════════ Performance (existing) ═══════════════════════
 function fmtSize(b){if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(2)+'MB';}
 function fmtMs(ms){return ms>=1000?(ms/1000).toFixed(2)+'s':ms+'ms';}
-
 function renderPerf(a,t){
   $('perfSt').style.display='none';
   const sections=[
@@ -261,61 +546,49 @@ function renderPerf(a,t){
       {label:'FCP',ak:'fcp',fmt:fmtMs,lower:true,desc:'First Contentful Paint'},
       {label:'LCP',ak:'lcp',fmt:fmtMs,lower:true,desc:'Largest Contentful Paint'},
       {label:'CLS',ak:'cls',fmt:v=>v.toFixed(3),lower:true,desc:'Cumulative Layout Shift'},
-    ]},
-    {title:'Page Load',items:[
+    ]},{title:'Page Load',items:[
       {label:'DOM Load',ak:'domLoad',fmt:fmtMs,lower:true,desc:'DOMContentLoaded'},
       {label:'Page Load',ak:'pageLoad',fmt:fmtMs,lower:true,desc:'Load Event End'},
-    ]},
-    {title:'Resources',items:[
+    ]},{title:'Resources',items:[
       {label:'Total Size',ak:'totalSize',fmt:fmtSize,lower:true},
       {label:'Requests',ak:'totalRequests',fmt:v=>v+'건',lower:true},
-      {label:'JS',ak:'jsSize',fmt:v=>fmtSize(v),lower:true,count:'jsCount'},
-      {label:'CSS',ak:'cssSize',fmt:v=>fmtSize(v),lower:true,count:'cssCount'},
-      {label:'Images',ak:'imgSize',fmt:v=>fmtSize(v),lower:true,count:'imgCount'},
-    ]},
-    {title:'DOM Complexity',items:[
+      {label:'JS',ak:'jsSize',fmt:fmtSize,lower:true,count:'jsCount'},
+      {label:'CSS',ak:'cssSize',fmt:fmtSize,lower:true,count:'cssCount'},
+      {label:'Images',ak:'imgSize',fmt:fmtSize,lower:true,count:'imgCount'},
+    ]},{title:'DOM Complexity',items:[
       {label:'DOM Nodes',ak:'domNodes',fmt:v=>v.toLocaleString()+'개',lower:true},
     ]},
   ];
-
   let html='<div class="perf-hdr"><span>Metric</span><span>AS-IS</span><span>TO-BE</span></div>';
   sections.forEach(sec=>{
     html+='<div class="perf-section"><div class="perf-section-title">'+sec.title+'</div>';
     sec.items.forEach(it=>{
-      const av=a[it.ak]||0, tv=t[it.ak]||0;
-      const af=it.fmt(av), tf=it.fmt(tv);
-      // Determine winner (lower is better by default)
+      const av=a[it.ak]||0,tv=t[it.ak]||0;
+      const af=it.fmt(av),tf=it.fmt(tv);
       let aw='',tw='';
-      if(av!==tv&&av>0&&tv>0){
-        if(it.lower){aw=av<=tv?'win':'lose';tw=tv<=av?'win':'lose';}
-        else{aw=av>=tv?'win':'lose';tw=tv>=av?'win':'lose';}
-      }
+      if(av!==tv&&av>0&&tv>0){if(it.lower){aw=av<=tv?'win':'lose';tw=tv<=av?'win':'lose';}else{aw=av>=tv?'win':'lose';tw=tv>=av?'win':'lose';}}
       const countInfo=it.count?(' ('+a[it.count]+'건 / '+t[it.count]+'건)'):'';
       const label=it.label+(it.desc?' <span style="color:var(--muted);font-size:9px">'+it.desc+'</span>':'');
-      html+='<div class="perf-row"><div class="perf-label">'+label+'</div>';
-      html+='<div class="perf-val asis-v '+aw+'">'+af+'</div>';
-      html+='<div class="perf-val tobe-v '+tw+'">'+tf+'</div></div>';
-    });
-    html+='</div>';
+      html+='<div class="perf-row"><div class="perf-label">'+label+'</div><div class="perf-val asis-v '+aw+'">'+af+'</div><div class="perf-val tobe-v '+tw+'">'+tf+'</div></div>';
+    });html+='</div>';
   });
-  $('perfRes').innerHTML=html;
-  toast('성능 측정 완료');
+  $('perfRes').innerHTML=html;toast('성능 측정 완료');
 }
 
+// ═══════════════════════ UI (existing) ═══════════════════════
+function initDiv(){
+  const dv=$('divider'),ap=$('asisPW'),tp=$('tobePW');let drag=false;
+  dv.onmousedown=e=>{drag=true;dv.classList.add('dragging');e.preventDefault();};
+  document.onmousemove=e=>{if(!drag)return;const r=$('main').getBoundingClientRect();const c=Math.max(.2,Math.min(.8,(e.clientX-r.left)/r.width));ap.style.flex='none';ap.style.width=(c*100)+'%';tp.style.flex='1';};
+  document.onmouseup=()=>{drag=false;dv.classList.remove('dragging');};
+}
 function toggleMobile(on){
   mobileOn=on;
   chrome.runtime.sendMessage({type:'SET_MOBILE_UA',enabled:on},()=>{
-    ['asisPW','tobePW'].forEach(id=>{
-      const el=$(id);
-      el.classList.toggle('mobile-view',on);
-      el.style.flex='';el.style.width='';
-    });
+    ['asisPW','tobePW'].forEach(id=>{const el=$(id);el.classList.toggle('mobile-view',on);el.style.flex='';el.style.width='';});
     if(on&&pOpen){pOpen=false;$('sp').classList.add('collapsed');$('panelBtn').textContent='\u25C0 비교 패널';}
     toast(on?'모바일 모드 ON':'데스크톱 모드 복원');
-    if(aR||tR){
-      [$('asisF'),$('tobeF')].forEach(f=>{if(f.src)f.src=f.src;});
-      aR=false;tR=false;fs('asis','loading');fs('tobe','loading');
-    }
+    if(aR||tR){[$('asisF'),$('tobeF')].forEach(f=>{if(f.src)f.src=f.src;});aR=false;tR=false;fs('asis','loading');fs('tobe','loading');}
   });
 }
 function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(()=>el.classList.remove('show'),2500);}

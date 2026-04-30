@@ -29,6 +29,13 @@
       window.scrollTo({ top: e.data.ratio * (document.documentElement.scrollHeight - window.innerHeight), behavior: 'instant' });
     }
 
+    // Full audit extract
+    if (e.data.type === 'AUDIT_REQUEST') {
+      const result = { seo: auditSEO(), jsonld: auditJSONLD(), sections: auditSections(), media: auditMedia() };
+      window.parent.postMessage({ type: 'AUDIT_RESULT', role: myRole, reqId: e.data.reqId, result }, '*');
+      return;
+    }
+
     // DOM extract
     if (e.data.type === 'DOM_EXTRACT_REQUEST') {
       const result = {};
@@ -58,6 +65,135 @@
       window.parent.postMessage({ type: 'DOM_EXTRACT_RESULT', role: myRole, reqId: e.data.reqId, result }, '*');
     }
   });
+
+  // ─── Audit extraction functions ───
+  function auditSEO() {
+    const title = document.title || null;
+    const desc = document.querySelector('meta[name="description"]');
+    const canon = document.querySelector('link[rel="canonical"]');
+    const robots = document.querySelector('meta[name="robots"]');
+    const favicon = document.querySelector('link[rel="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]');
+    const og = {};
+    document.querySelectorAll('meta[property^="og:"]').forEach(el => {
+      og[el.getAttribute('property')] = el.getAttribute('content') || '';
+    });
+    const twitter = {};
+    document.querySelectorAll('meta[name^="twitter:"]').forEach(el => {
+      twitter[el.getAttribute('name')] = el.getAttribute('content') || '';
+    });
+    const hreflangs = [];
+    document.querySelectorAll('link[rel="alternate"][hreflang]').forEach(el => {
+      hreflangs.push({ lang: el.getAttribute('hreflang'), href: el.getAttribute('href') });
+    });
+    return {
+      title, titleLength: title ? title.length : 0,
+      metaDescription: desc ? desc.getAttribute('content') : null,
+      metaDescLength: desc ? (desc.getAttribute('content') || '').length : 0,
+      canonical: canon ? canon.getAttribute('href') : null,
+      robots: robots ? robots.getAttribute('content') : null,
+      og, twitter, hreflangs,
+      favicon: favicon ? favicon.getAttribute('href') : null
+    };
+  }
+
+  function auditJSONLD() {
+    const items = [];
+    document.querySelectorAll('script[type="application/ld+json"]').forEach(s => {
+      try {
+        const data = JSON.parse(s.textContent);
+        if (data['@graph']) data['@graph'].forEach(i => items.push(parseLDItem(i)));
+        else if (Array.isArray(data)) data.forEach(i => items.push(parseLDItem(i)));
+        else items.push(parseLDItem(data));
+      } catch (e) {}
+    });
+    return items;
+  }
+
+  function parseLDItem(item) {
+    const type = item['@type'];
+    const r = { type };
+    if (type === 'Product') {
+      r.name = item.name || null;
+      r.sku = item.sku || null;
+      r.brand = (item.brand && item.brand.name) || item.brand || null;
+      r.image = !!item.image;
+      r.description = item.description ? item.description.substring(0, 80) : null;
+      if (item.offers) {
+        const o = Array.isArray(item.offers) ? item.offers[0] : item.offers;
+        r.offersPrice = o.price || o.lowPrice || null;
+        r.offersCurrency = o.priceCurrency || null;
+        r.offersAvailability = o.availability || null;
+      }
+      if (item.aggregateRating) {
+        r.ratingValue = item.aggregateRating.ratingValue;
+        r.reviewCount = item.aggregateRating.reviewCount;
+      }
+    }
+    if (type === 'BreadcrumbList') {
+      r.itemCount = item.itemListElement ? item.itemListElement.length : 0;
+      r.items = (item.itemListElement || []).map(i => i.name || (i.item && i.item.name) || '');
+    }
+    if (type === 'FAQPage') {
+      r.questionCount = item.mainEntity ? item.mainEntity.length : 0;
+    }
+    if (type === 'Organization') {
+      r.name = item.name || null; r.url = item.url || null;
+    }
+    return r;
+  }
+
+  function auditSections() {
+    const secs = [];
+    const seen = new Set();
+    const candidates = document.querySelectorAll(
+      'section, .story-wrap, .component-wrap, [class*="story"], [class*="section_wrap"], ' +
+      '[class*="marketing"], [id*="story"], .section, [class*="content_section"], ' +
+      '[class*="product_detail"], [class*="spec_wrap"], [class*="review_wrap"]'
+    );
+    candidates.forEach(el => {
+      const heading = el.querySelector(
+        'h1,h2,h3,h4,.component-header__title,[class*="section_title"],[class*="story_title"],' +
+        '[class*="tit"]:not(script):not(style),.title'
+      );
+      let title = heading ? (heading.innerText || heading.textContent || '').trim().split('\n')[0].trim() : null;
+      if (title && title.length > 80) title = title.substring(0, 80) + '…';
+      const id = el.id || null;
+      // Skip tiny, empty, or duplicate
+      if (!title && !id) return;
+      if (el.offsetHeight < 50) return;
+      const key = (title || '') + '|' + (id || '');
+      if (seen.has(key)) return;
+      seen.add(key);
+      secs.push({
+        id, title,
+        tag: el.tagName.toLowerCase(),
+        className: (typeof el.className === 'string' ? el.className : '').substring(0, 120),
+        imageCount: el.querySelectorAll('img').length
+      });
+    });
+    return secs;
+  }
+
+  function auditMedia() {
+    const imgs = document.querySelectorAll('img');
+    let altMiss = 0, lazyCnt = 0;
+    imgs.forEach(img => {
+      const alt = img.getAttribute('alt');
+      if (alt === null || alt === '') altMiss++;
+      if (img.loading === 'lazy' || img.dataset.src || img.dataset.lazySrc) lazyCnt++;
+    });
+    const videos = document.querySelectorAll('video,iframe[src*="youtube"],iframe[src*="vimeo"]');
+    const gallery = document.querySelectorAll('[class*="gallery"] img,[class*="thumb"] img,.swiper-slide img');
+    return {
+      totalImages: imgs.length,
+      altMissing: altMiss,
+      altMissingRate: imgs.length > 0 ? Math.round(altMiss / imgs.length * 1000) / 10 : 0,
+      videoCount: videos.length,
+      galleryThumbnails: gallery.length,
+      lazyLoadCount: lazyCnt,
+      lazyLoadRate: imgs.length > 0 ? Math.round(lazyCnt / imgs.length * 1000) / 10 : 0
+    };
+  }
 
   // Scroll event - send ratio to parent
   window.addEventListener('scroll', () => {
