@@ -148,12 +148,15 @@
     const candidates = document.querySelectorAll(
       'section, .story-wrap, .component-wrap, [class*="story"], [class*="section_wrap"], ' +
       '[class*="marketing"], [id*="story"], .section, [class*="content_section"], ' +
-      '[class*="product_detail"], [class*="spec_wrap"], [class*="review_wrap"]'
+      '[class*="product_detail"], [class*="spec_wrap"], [class*="review_wrap"], ' +
+      '[class*="benefit"], [class*="recommend"], [class*="buy-benefit"], ' +
+      '[class*="purchase"], .accordion-wrap, [class*="accordion"], ' +
+      '[class*="cart"], [class*="coupon"], [class*="delivery"]'
     );
     candidates.forEach(el => {
       const heading = el.querySelector(
-        'h1,h2,h3,h4,.component-header__title,[class*="section_title"],[class*="story_title"],' +
-        '[class*="tit"]:not(script):not(style),.title'
+        'h1,h2,h3,h4,h5,.component-header__title,[class*="section_title"],[class*="story_title"],' +
+        '[class*="tit"]:not(script):not(style):not(li),.title,[class*="heading"]'
       );
       let title = heading ? (heading.innerText || heading.textContent || '').trim().split('\n')[0].trim() : null;
       if (title && title.length > 80) title = title.substring(0, 80) + '…';
@@ -207,8 +210,6 @@
 
   function auditSpecs() {
     const specs = {};
-    // AS-IS: .spec-info-wrap table, .tbl-spec, .spec-area table
-    // TO-BE: [class*="spec_table"], [class*="spec_list"]
     const tables = document.querySelectorAll(
       '.spec-info-wrap table, .tbl-spec, .spec-area table, [class*="spec_table"] table, ' +
       '[class*="spec_list"] table, table.tbl-list, .spec-wrap table, [class*="specification"] table'
@@ -218,23 +219,32 @@
         const th = tr.querySelector('th, td:first-child');
         const td = tr.querySelector('td:last-child');
         if (th && td && th !== td) {
-          const key = (th.innerText || th.textContent || '').trim().replace(/\s+/g, ' ');
-          const val = (td.innerText || td.textContent || '').trim().replace(/\s+/g, ' ');
+          const key = specCleanText(th);
+          const val = specCleanText(td);
           if (key && val && key.length < 60) specs[key] = val;
         }
       });
     });
-    // Also try dl/dt/dd pattern
     document.querySelectorAll('.spec-info-wrap dl, [class*="spec"] dl').forEach(dl => {
       const dts = dl.querySelectorAll('dt');
       const dds = dl.querySelectorAll('dd');
       dts.forEach((dt, i) => {
-        const key = (dt.innerText || dt.textContent || '').trim().replace(/\s+/g, ' ');
-        const val = dds[i] ? (dds[i].innerText || dds[i].textContent || '').trim().replace(/\s+/g, ' ') : '';
+        const key = specCleanText(dt);
+        const val = dds[i] ? specCleanText(dds[i]) : '';
         if (key && val && key.length < 60) specs[key] = val;
       });
     });
     return specs;
+  }
+
+  function specCleanText(el) {
+    const clone = el.cloneNode(true);
+    // Remove sr-only, blind, hidden helper text (e.g., "있음", "없음" after icon)
+    clone.querySelectorAll('.blind,.sr-only,.visually-hidden,[class*="blind"],[class*="sr-only"],span[class*="hidden"]').forEach(s => s.remove());
+    let text = (clone.innerText || clone.textContent || '').trim().replace(/\s+/g, ' ');
+    // Normalize common icon+text patterns: "O있음" → "O", "X없음" → "X", "O 있음" → "O"
+    text = text.replace(/\s*(있음|없음)$/g, '').trim();
+    return text;
   }
 
   function auditSectionTexts() {
@@ -245,17 +255,29 @@
     );
     const seen = new Set();
     candidates.forEach(el => {
-      const heading = el.querySelector('h1,h2,h3,h4,.component-header__title,[class*="section_title"]');
+      const heading = el.querySelector('h1,h2,h3,h4,h5,.component-header__title,[class*="section_title"]');
       let title = heading ? (heading.innerText || heading.textContent || '').trim().split('\n')[0].trim() : null;
       if (!title || el.offsetHeight < 50) return;
       if (title.length > 80) title = title.substring(0, 80);
       if (seen.has(title.toLowerCase())) return;
       seen.add(title.toLowerCase());
-      // Get text content excluding scripts/styles, limit to 500 chars
+      // Get cleaned text: remove non-content elements
       const clone = el.cloneNode(true);
-      clone.querySelectorAll('script,style,noscript').forEach(s => s.remove());
-      let text = (clone.innerText || clone.textContent || '').trim().replace(/\s+/g, ' ');
-      if (text.length > 500) text = text.substring(0, 500);
+      clone.querySelectorAll(
+        'script,style,noscript,button,select,input,textarea,svg,' +
+        '.blind,.sr-only,.visually-hidden,[class*="blind"],[class*="sr-only"],' +
+        '[aria-hidden="true"],[style*="display:none"],[style*="display: none"],' +
+        'nav,[role="navigation"],[class*="btn"],[class*="swiper-pagination"],' +
+        '[class*="slide-controls"],[class*="tooltip"]'
+      ).forEach(s => s.remove());
+      let text = (clone.innerText || clone.textContent || '').trim()
+        .replace(/\n+/g, ' ')           // newlines to space
+        .replace(/\s+/g, ' ')           // collapse whitespace
+        .replace(/[^\S ]+/g, ' ')       // non-breaking spaces
+        .trim();
+      if (text.length > 300) text = text.substring(0, 300);
+      // Skip if text is too short (likely just the title)
+      if (text.length < 20) return;
       results.push({ title, text });
     });
     return results;

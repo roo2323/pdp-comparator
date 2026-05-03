@@ -77,10 +77,13 @@ function runAudit() {
     var secs = [], seen = {};
     var els = document.querySelectorAll(
       'section, .story-wrap, .component-wrap, [class*="story"], [class*="section_wrap"], ' +
-      '[class*="marketing"], [id*="story"], .section, [class*="content_section"]'
+      '[class*="marketing"], [id*="story"], .section, [class*="content_section"], ' +
+      '[class*="benefit"], [class*="recommend"], [class*="buy-benefit"], ' +
+      '[class*="purchase"], .accordion-wrap, [class*="accordion"], ' +
+      '[class*="cart"], [class*="coupon"], [class*="delivery"]'
     );
     els.forEach(function(el) {
-      var heading = el.querySelector('h1,h2,h3,h4,.component-header__title,[class*="section_title"],[class*="story_title"]');
+      var heading = el.querySelector('h1,h2,h3,h4,h5,.component-header__title,[class*="section_title"],[class*="story_title"],[class*="heading"]');
       var title = heading ? (heading.innerText || heading.textContent || '').trim().split('\n')[0].trim() : null;
       if (title && title.length > 80) title = title.substring(0, 80);
       var id = el.id || null;
@@ -122,6 +125,14 @@ function runAudit() {
     return nodes;
   }
 
+  function specCleanText(el) {
+    var clone = el.cloneNode(true);
+    clone.querySelectorAll('.blind,.sr-only,.visually-hidden,[class*="blind"],[class*="sr-only"],span[class*="hidden"]').forEach(function(s) { s.remove(); });
+    var text = (clone.innerText || clone.textContent || '').trim().replace(/\s+/g, ' ');
+    text = text.replace(/\s*(있음|없음)$/g, '').trim();
+    return text;
+  }
+
   function auditSpecs() {
     var specs = {};
     document.querySelectorAll(
@@ -132,8 +143,8 @@ function runAudit() {
         var th = tr.querySelector('th, td:first-child');
         var td = tr.querySelector('td:last-child');
         if (th && td && th !== td) {
-          var key = (th.innerText || th.textContent || '').trim().replace(/\s+/g, ' ');
-          var val = (td.innerText || td.textContent || '').trim().replace(/\s+/g, ' ');
+          var key = specCleanText(th);
+          var val = specCleanText(td);
           if (key && val && key.length < 60) specs[key] = val;
         }
       });
