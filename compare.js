@@ -142,7 +142,8 @@ function load(){
   const apiUrl=API_BASE+'/api/v1/models/'+m+'?pageType='+pdpType;
   fetchApi(apiUrl).then(d=>{
     if(!d||!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
-    const asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
+    let asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
+    if(pdpType==='SUBSCRIPTION') asisPath+='?dpType=careTab';
     const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
     $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
     $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
