@@ -108,6 +108,29 @@ function bind(){
 const BASE='https://wwwdev50.lge.co.kr';
 const API_BASE='http://pdpapisvc.lgekrdev.lge.co.kr';
 
+// API fetch: background proxy (CORS-free) with direct fetch fallback
+function fetchApi(url){
+  return new Promise((resolve,reject)=>{
+    // Try background proxy first
+    if(typeof chrome!=='undefined'&&chrome.runtime&&chrome.runtime.sendMessage){
+      try{
+        chrome.runtime.sendMessage({type:'API_PROXY',url},res=>{
+          if(chrome.runtime.lastError){
+            console.warn('[PDP] proxy failed, trying direct fetch:', chrome.runtime.lastError.message);
+            directFetch(url).then(resolve).catch(reject);
+            return;
+          }
+          if(res&&res.ok&&res.data?.data){resolve(res.data.data);}
+          else{console.warn('[PDP] proxy response invalid, trying direct fetch');directFetch(url).then(resolve).catch(reject);}
+        });
+      }catch(e){directFetch(url).then(resolve).catch(reject);}
+    }else{directFetch(url).then(resolve).catch(reject);}
+  });
+}
+function directFetch(url){
+  return fetch(url).then(r=>r.json()).then(j=>j.data||null);
+}
+
 function load(){
   const m=$('modelInput').value.trim();
   if(!m){toast('모델 ID를 입력해주세요');return;}
@@ -121,10 +144,8 @@ function load(){
   clearAuditTabs();
   toast('URL 조회 중...');
   const apiUrl=API_BASE+'/api/v1/models/'+m+'?pageType='+pdpType;
-  chrome.runtime.sendMessage({type:'API_PROXY',url:apiUrl},(res)=>{
-    if(!res||!res.ok||!res.data?.data){toast('API 오류 — 폴백 모드');console.error('[PDP] API fail:',res);loadFallback(m,pdpType);return;}
-    const d=res.data.data;
-    if(!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
+  fetchApi(apiUrl).then(d=>{
+    if(!d||!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
     const asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
     const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
     $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
@@ -132,7 +153,7 @@ function load(){
     fs('asis','loading');fs('tobe','loading');
     $('asisF').src=BASE+asisPath;$('tobeF').src=tobeUrl;
     toast('URL 자동 설정 완료');
-  });
+  }).catch(e=>{console.error('[PDP] API fail:',e);toast('API 오류 — 폴백 모드');loadFallback(m,pdpType);});
 }
 function loadFallback(m,pdpType){
   // API 없이 URL 패턴으로 직접 생성

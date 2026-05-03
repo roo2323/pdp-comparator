@@ -15,11 +15,21 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'GET_API_CACHE': { sendResponse(apiCache.get(msg.modelId) || null); return true; }
     case 'OPEN_COMPARE': { chrome.tabs.create({ url: chrome.runtime.getURL('compare.html') }); break; }
     case 'API_PROXY': {
+      console.log('[PDP-BG] API_PROXY request:', msg.url);
       fetch(msg.url)
-        .then(r => r.json())
-        .then(data => sendResponse({ ok: true, data }))
-        .catch(e => sendResponse({ ok: false, error: e.message }));
-      return true; // async sendResponse
+        .then(r => {
+          console.log('[PDP-BG] API status:', r.status);
+          return r.json();
+        })
+        .then(data => {
+          console.log('[PDP-BG] API success, categoryUrlPath:', data?.data?.category?.categoryUrlPath);
+          sendResponse({ ok: true, data });
+        })
+        .catch(e => {
+          console.error('[PDP-BG] API error:', e.message);
+          sendResponse({ ok: false, error: e.message });
+        });
+      return true;
     }
     case 'SET_MOBILE_UA': {
       chrome.storage.local.set({ mobileMode: msg.enabled });
