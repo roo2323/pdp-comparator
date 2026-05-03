@@ -110,16 +110,11 @@ async function main() {
 
 async function getUrls(modelId, pdpType) {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/models/${modelId}`);
+    const res = await fetch(`${API_BASE}/api/v1/models/${modelId}?pageType=${pdpType}`);
     const json = await res.json();
     const d = json.data;
     if (!d?.category?.categoryUrlPath || !d?.modelInfo?.modelName) return null;
-    const catPath = d.category.categoryUrlPath;
-    const modelSlug = d.modelInfo.modelName.toLowerCase();
-    const hasSwitchTab = d.conditions?.isSwitchTabDisplayable || false;
-    const isRentalOnly = d.conditions?.isRentalOnly || false;
-    const useCareSol = pdpType === 'SUBSCRIPTION' && (hasSwitchTab || isRentalOnly);
-    const asisPath = useCareSol ? '/care-solutions' + catPath + '/' + modelSlug : catPath + '/' + modelSlug;
+    const asisPath = d.category.categoryUrlPath + '/' + d.modelInfo.modelName.toLowerCase();
     const tobeUrl = pdpType === 'SUBSCRIPTION'
       ? `${BASE}/model?modelId=${modelId}&pdpType=SUBSCRIPTION`
       : `${BASE}/model?modelId=${modelId}`;

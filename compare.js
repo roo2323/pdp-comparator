@@ -120,27 +120,17 @@ function load(){
   $('perfSt').textContent='페이지 로드 완료 후 자동 측정됩니다';$('perfRes').innerHTML='';
   clearAuditTabs();
   toast('URL 조회 중...');
-  fetch(API_BASE+'/api/v1/models/'+m)
+  fetch(API_BASE+'/api/v1/models/'+m+'?pageType='+pdpType)
     .then(r=>r.json()).then(res=>{
       const d=res.data;
       if(!d||!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
-      const catPath=d.category.categoryUrlPath;
-      const modelSlug=d.modelInfo.modelName.toLowerCase();
-      const hasSwitchTab=d.conditions?.isSwitchTabDisplayable||false;
-      const isRentalOnly=d.conditions?.isRentalOnly||false;
-      let asisPath;
-      if(pdpType==='SUBSCRIPTION'&&(hasSwitchTab||isRentalOnly)){
-        // 일시불/구독 전환 가능 or 구독전용 → /care-solutions URL 존재
-        asisPath='/care-solutions'+catPath+'/'+modelSlug;
-      } else {
-        asisPath=catPath+'/'+modelSlug;
-      }
+      const asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
       const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
       $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
       $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
       fs('asis','loading');fs('tobe','loading');
       $('asisF').src=BASE+asisPath;$('tobeF').src=tobeUrl;
-      toast('URL 자동 설정 완료'+(pdpType==='SUBSCRIPTION'&&!hasSwitchTab&&!isRentalOnly?' (구독 전용 URL 없음 — 일시불 URL 사용)':''));
+      toast('URL 자동 설정 완료');
     }).catch(e=>{toast('API 오류 — 폴백 모드');console.error(e);loadFallback(m,pdpType);});
 }
 function loadFallback(m,pdpType){
