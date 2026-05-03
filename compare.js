@@ -108,27 +108,23 @@ function bind(){
 const BASE='https://wwwdev50.lge.co.kr';
 const API_BASE='http://pdpapisvc.lgekrdev.lge.co.kr';
 
-// API fetch: background proxy (CORS-free) with direct fetch fallback
+// API fetch via XHR (extension pages bypass CORS for XHR with host_permissions)
 function fetchApi(url){
   return new Promise((resolve,reject)=>{
-    // Try background proxy first
-    if(typeof chrome!=='undefined'&&chrome.runtime&&chrome.runtime.sendMessage){
+    const xhr=new XMLHttpRequest();
+    xhr.open('GET',url,true);
+    xhr.onload=function(){
       try{
-        chrome.runtime.sendMessage({type:'API_PROXY',url},res=>{
-          if(chrome.runtime.lastError){
-            console.warn('[PDP] proxy failed, trying direct fetch:', chrome.runtime.lastError.message);
-            directFetch(url).then(resolve).catch(reject);
-            return;
-          }
-          if(res&&res.ok&&res.data?.data){resolve(res.data.data);}
-          else{console.warn('[PDP] proxy response invalid, trying direct fetch');directFetch(url).then(resolve).catch(reject);}
-        });
-      }catch(e){directFetch(url).then(resolve).catch(reject);}
-    }else{directFetch(url).then(resolve).catch(reject);}
+        const json=JSON.parse(xhr.responseText);
+        console.log('[PDP] API ok, categoryUrlPath:', json?.data?.category?.categoryUrlPath);
+        resolve(json.data||null);
+      }catch(e){reject(e);}
+    };
+    xhr.onerror=function(){reject(new Error('XHR failed: '+xhr.status));};
+    xhr.ontimeout=function(){reject(new Error('XHR timeout'));};
+    xhr.timeout=10000;
+    xhr.send();
   });
-}
-function directFetch(url){
-  return fetch(url).then(r=>r.json()).then(j=>j.data||null);
 }
 
 function load(){

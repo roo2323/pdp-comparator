@@ -15,19 +15,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'GET_API_CACHE': { sendResponse(apiCache.get(msg.modelId) || null); return true; }
     case 'OPEN_COMPARE': { chrome.tabs.create({ url: chrome.runtime.getURL('compare.html') }); break; }
     case 'API_PROXY': {
+      const reqId = msg.reqId;
       console.log('[PDP-BG] API_PROXY request:', msg.url);
       fetch(msg.url)
-        .then(r => {
-          console.log('[PDP-BG] API status:', r.status);
-          return r.json();
-        })
+        .then(r => r.json())
         .then(data => {
           console.log('[PDP-BG] API success, categoryUrlPath:', data?.data?.category?.categoryUrlPath);
+          // Send result back via both sendResponse AND tabs message (belt-and-suspenders)
           sendResponse({ ok: true, data });
+          if (sender.tab?.id) {
+            chrome.tabs.sendMessage(sender.tab.id, { type: 'API_PROXY_RESULT', ok: true, data, reqId });
+          }
         })
         .catch(e => {
           console.error('[PDP-BG] API error:', e.message);
           sendResponse({ ok: false, error: e.message });
+          if (sender.tab?.id) {
+            chrome.tabs.sendMessage(sender.tab.id, { type: 'API_PROXY_RESULT', ok: false, error: e.message, reqId });
+          }
         });
       return true;
     }
