@@ -747,6 +747,15 @@ function renderWordDiff(diff){
   }).join('');
 }
 
+// Side-by-side: show one side with highlights for its changes
+function renderWordDiffSide(diff,highlightType){
+  return diff.map(d=>{
+    if(d.type==='eq') return `<span class="wdiff-eq">${esc(d.val)}</span>`;
+    if(d.type===highlightType) return `<span class="wdiff-${highlightType}">${esc(d.val)}</span>`;
+    return ''; // hide the other side's changes
+  }).join('');
+}
+
 // ─── Heading tree comparison ───
 function renderHeadingTree(nodes,missing){
   const missSet=new Set((missing||[]).map(n=>n.text.toLowerCase()));
@@ -836,7 +845,11 @@ function renderDeepDiff(a,t){
       html+='<div class="audit-section"><div class="audit-section-title">섹션별 텍스트 Word Diff ('+matched.length+'개 차이)</div>';
       matched.forEach(m=>{
         const diff=wordDiff(m.aText,m.tText);
-        html+=`<div class="wdiff-title">${esc(m.title)}</div><div class="wdiff">${renderWordDiff(diff)}</div>`;
+        html+=`<div class="wdiff-title">${esc(m.title)}</div>`;
+        html+='<div class="wdiff-split">';
+        html+=`<div class="wdiff-side"><div class="wdiff-side-label" style="color:var(--asis)">AS-IS</div><div class="wdiff wdiff-asis">${renderWordDiffSide(diff,'del')}</div></div>`;
+        html+=`<div class="wdiff-side"><div class="wdiff-side-label" style="color:var(--tobe)">TO-BE</div><div class="wdiff wdiff-tobe">${renderWordDiffSide(diff,'add')}</div></div>`;
+        html+='</div>';
       });
       html+='</div>';
     }
