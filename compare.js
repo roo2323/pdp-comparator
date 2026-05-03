@@ -120,21 +120,12 @@ function load(){
   $('perfSt').textContent='페이지 로드 완료 후 자동 측정됩니다';$('perfRes').innerHTML='';
   clearAuditTabs();
   toast('URL 조회 중...');
-  fetch(API_BASE+'/api/v1/models/'+m+'/purchase-type')
+  fetch(API_BASE+'/api/v1/models/'+m)
     .then(r=>r.json()).then(res=>{
       const d=res.data;
-      if(!d){toast('API 응답 없음 — 폴백 모드');loadFallback(m,pdpType);return;}
-      let asisPath,tobeUrl;
-      // 구독: subscription.url 우선, 없으면 purchase.url + #702 (구독탭 앵커)
-      const baseUrl=d.subscription?.url||d.purchase?.url||null;
-      if(!baseUrl){toast('URL 없음 — 폴백 모드');loadFallback(m,pdpType);return;}
-      if(pdpType==='SUBSCRIPTION'){
-        asisPath=d.subscription?.url||(d.purchase.url+'#702');
-        tobeUrl=BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION';
-      } else {
-        asisPath=d.purchase?.url||d.subscription?.url;
-        tobeUrl=BASE+'/model?modelId='+m;
-      }
+      if(!d||!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
+      const asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
+      const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
       $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
       $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
       fs('asis','loading');fs('tobe','loading');

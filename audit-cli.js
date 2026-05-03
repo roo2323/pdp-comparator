@@ -110,18 +110,14 @@ async function main() {
 
 async function getUrls(modelId, pdpType) {
   try {
-    const res = await fetch(`${API_BASE}/api/v1/models/${modelId}/purchase-type`);
+    const res = await fetch(`${API_BASE}/api/v1/models/${modelId}`);
     const json = await res.json();
     const d = json.data;
-    if (!d) return null;
-    let asisPath, tobeUrl;
-    if (pdpType === 'SUBSCRIPTION' && d.subscription?.url) {
-      asisPath = d.subscription.url;
-      tobeUrl = `${BASE}/model?modelId=${modelId}&pdpType=SUBSCRIPTION`;
-    } else if (d.purchase?.url) {
-      asisPath = d.purchase.url;
-      tobeUrl = `${BASE}/model?modelId=${modelId}`;
-    } else return null;
+    if (!d?.category?.categoryUrlPath || !d?.modelInfo?.modelName) return null;
+    const asisPath = d.category.categoryUrlPath + '/' + d.modelInfo.modelName.toLowerCase();
+    const tobeUrl = pdpType === 'SUBSCRIPTION'
+      ? `${BASE}/model?modelId=${modelId}&pdpType=SUBSCRIPTION`
+      : `${BASE}/model?modelId=${modelId}`;
     return { asis: BASE + asisPath, tobe: tobeUrl };
   } catch (e) { return null; }
 }
