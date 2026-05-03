@@ -1,0 +1,15 @@
+{
+  "name": "pdp-comparator",
+  "version": "1.0.0",
+  "description": "LGE PDP(Product Detail Page) 개편 프로젝트의 **AS-IS(JSP) / TO-BE(Next.js)** 페이지를 한 화면에서 비교 검증하는 Chrome 익스텐션입니다.",
+  "main": "background.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
+}
