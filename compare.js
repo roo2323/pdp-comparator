@@ -121,21 +121,18 @@ function load(){
   clearAuditTabs();
   toast('URL 조회 중...');
   const apiUrl=API_BASE+'/api/v1/models/'+m+'?pageType='+pdpType;
-  console.log('[PDP-Comparator] API 호출:', apiUrl, 'pdpType:', pdpType);
-  fetch(apiUrl)
-    .then(r=>r.json()).then(res=>{
-      const d=res.data;
-      console.log('[PDP-Comparator] API 응답 categoryUrlPath:', d?.category?.categoryUrlPath, 'modelName:', d?.modelInfo?.modelName);
-      if(!d||!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
-      const asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
-      console.log('[PDP-Comparator] AS-IS path:', asisPath);
-      const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
-      $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
-      $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
-      fs('asis','loading');fs('tobe','loading');
-      $('asisF').src=BASE+asisPath;$('tobeF').src=tobeUrl;
-      toast('URL 자동 설정 완료');
-    }).catch(e=>{toast('API 오류 — 폴백 모드');console.error(e);loadFallback(m,pdpType);});
+  chrome.runtime.sendMessage({type:'API_PROXY',url:apiUrl},(res)=>{
+    if(!res||!res.ok||!res.data?.data){toast('API 오류 — 폴백 모드');console.error('[PDP] API fail:',res);loadFallback(m,pdpType);return;}
+    const d=res.data.data;
+    if(!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
+    const asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
+    const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
+    $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
+    $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
+    fs('asis','loading');fs('tobe','loading');
+    $('asisF').src=BASE+asisPath;$('tobeF').src=tobeUrl;
+    toast('URL 자동 설정 완료');
+  });
 }
 function loadFallback(m,pdpType){
   // API 없이 URL 패턴으로 직접 생성

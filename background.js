@@ -14,6 +14,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
     case 'GET_API_CACHE': { sendResponse(apiCache.get(msg.modelId) || null); return true; }
     case 'OPEN_COMPARE': { chrome.tabs.create({ url: chrome.runtime.getURL('compare.html') }); break; }
+    case 'API_PROXY': {
+      fetch(msg.url)
+        .then(r => r.json())
+        .then(data => sendResponse({ ok: true, data }))
+        .catch(e => sendResponse({ ok: false, error: e.message }));
+      return true; // async sendResponse
+    }
     case 'SET_MOBILE_UA': {
       chrome.storage.local.set({ mobileMode: msg.enabled });
       const allTypes = ['sub_frame', 'xmlhttprequest', 'script', 'stylesheet', 'image', 'font', 'other'];
