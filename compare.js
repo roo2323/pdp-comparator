@@ -125,9 +125,16 @@ function load(){
       const d=res.data;
       if(!d){toast('API 응답 없음 — 폴백 모드');loadFallback(m,pdpType);return;}
       let asisPath,tobeUrl;
-      if(pdpType==='SUBSCRIPTION'&&d.subscription&&d.subscription.url){asisPath=d.subscription.url;tobeUrl=BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION';}
-      else if(d.purchase&&d.purchase.url){asisPath=d.purchase.url;tobeUrl=BASE+'/model?modelId='+m;}
-      else{toast('URL 없음 — 폴백 모드');loadFallback(m,pdpType);return;}
+      // 구독: subscription.url 우선, 없으면 purchase.url + #702 (구독탭 앵커)
+      const baseUrl=d.subscription?.url||d.purchase?.url||null;
+      if(!baseUrl){toast('URL 없음 — 폴백 모드');loadFallback(m,pdpType);return;}
+      if(pdpType==='SUBSCRIPTION'){
+        asisPath=d.subscription?.url||(d.purchase.url+'#702');
+        tobeUrl=BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION';
+      } else {
+        asisPath=d.purchase?.url||d.subscription?.url;
+        tobeUrl=BASE+'/model?modelId='+m;
+      }
       $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
       $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
       fs('asis','loading');fs('tobe','loading');
