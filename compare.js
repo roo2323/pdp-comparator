@@ -120,11 +120,15 @@ function load(){
   $('perfSt').textContent='페이지 로드 완료 후 자동 측정됩니다';$('perfRes').innerHTML='';
   clearAuditTabs();
   toast('URL 조회 중...');
-  fetch(API_BASE+'/api/v1/models/'+m+'?pageType='+pdpType)
+  const apiUrl=API_BASE+'/api/v1/models/'+m+'?pageType='+pdpType;
+  console.log('[PDP-Comparator] API 호출:', apiUrl, 'pdpType:', pdpType);
+  fetch(apiUrl)
     .then(r=>r.json()).then(res=>{
       const d=res.data;
+      console.log('[PDP-Comparator] API 응답 categoryUrlPath:', d?.category?.categoryUrlPath, 'modelName:', d?.modelInfo?.modelName);
       if(!d||!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
       const asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
+      console.log('[PDP-Comparator] AS-IS path:', asisPath);
       const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
       $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
       $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
