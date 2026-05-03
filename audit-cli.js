@@ -116,7 +116,10 @@ async function getUrls(modelId, pdpType) {
     if (!d?.category?.categoryUrlPath || !d?.modelInfo?.modelName) return null;
     const catPath = d.category.categoryUrlPath;
     const modelSlug = d.modelInfo.modelName.toLowerCase();
-    const asisPath = pdpType === 'SUBSCRIPTION' ? '/care-solutions' + catPath + '/' + modelSlug : catPath + '/' + modelSlug;
+    const hasSwitchTab = d.conditions?.isSwitchTabDisplayable || false;
+    const isRentalOnly = d.conditions?.isRentalOnly || false;
+    const useCareSol = pdpType === 'SUBSCRIPTION' && (hasSwitchTab || isRentalOnly);
+    const asisPath = useCareSol ? '/care-solutions' + catPath + '/' + modelSlug : catPath + '/' + modelSlug;
     const tobeUrl = pdpType === 'SUBSCRIPTION'
       ? `${BASE}/model?modelId=${modelId}&pdpType=SUBSCRIPTION`
       : `${BASE}/model?modelId=${modelId}`;
