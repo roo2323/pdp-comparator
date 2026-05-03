@@ -124,7 +124,10 @@ function load(){
     .then(r=>r.json()).then(res=>{
       const d=res.data;
       if(!d||!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
-      const asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
+      const catPath=d.category.categoryUrlPath;
+      const modelSlug=d.modelInfo.modelName.toLowerCase();
+      // 구독 모드: AS-IS는 /care-solutions prefix 붙임
+      const asisPath=pdpType==='SUBSCRIPTION'?'/care-solutions'+catPath+'/'+modelSlug:catPath+'/'+modelSlug;
       const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
       $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
       $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
