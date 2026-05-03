@@ -31,7 +31,7 @@
 
     // Full audit extract
     if (e.data.type === 'AUDIT_REQUEST') {
-      const result = { seo: auditSEO(), jsonld: auditJSONLD(), sections: auditSections(), media: auditMedia(), headings: auditHeadings(), specs: auditSpecs(), sectionTexts: auditSectionTexts(), images: auditImages(), tracking: auditTracking(), scripts: auditScripts() };
+      const result = { seo: auditSEO(), jsonld: auditJSONLD(), sections: auditSections(), media: auditMedia(), headings: auditHeadings(), specs: auditSpecs(), sectionTexts: auditSectionTexts(), images: auditImages(), tracking: auditTracking(), scripts: auditScripts(), usp: auditUSP() };
       window.parent.postMessage({ type: 'AUDIT_RESULT', role: myRole, reqId: e.data.reqId, result }, '*');
       return;
     }
@@ -375,6 +375,75 @@
       }
     }
     return result;
+  }
+
+  function auditUSP() {
+    const result = { found: false, blocks: [], images: [], totalText: '', stats: {} };
+    // AS-IS: #overview.iw_section 또는 .story-wrap 내부의 마케팅 블록
+    // TO-BE: [class*="usp"], [class*="story"], [data-component*="usp"]
+    const container = document.querySelector(
+      '#overview.iw_section, #overview.container-fluid, ' +
+      '[class*="usp_section"], [class*="usp_wrap"], [class*="product_story"], ' +
+      '[data-component*="usp"], [class*="USP"]'
+    );
+    if (!container) {
+      // Fallback: collect all .story-wrap or section.component with story content
+      const storyBlocks = document.querySelectorAll('.story-wrap, [class*="story_section"], [class*="marketing_story"]');
+      if (!storyBlocks.length) return result;
+      result.found = true;
+      storyBlocks.forEach(function(block) { collectBlock(block, result); });
+    } else {
+      result.found = true;
+      result.containerId = container.id || null;
+      result.containerClass = (container.className || '').toString().substring(0, 120);
+      // Collect child sections/components within USP container
+      const children = container.querySelectorAll(
+        'section, .component-wrap, .story-wrap, [class*="section"], [class*="component"]'
+      );
+      if (children.length) {
+        children.forEach(function(block) { collectBlock(block, result); });
+      } else {
+        collectBlock(container, result);
+      }
+    }
+    // Stats
+    result.stats = {
+      blockCount: result.blocks.length,
+      imageCount: result.images.length,
+      totalTextLength: result.totalText.length,
+      videoCount: (container || document).querySelectorAll('video, [class*="video"], iframe[src*="youtube"]').length
+    };
+    return result;
+  }
+
+  function collectBlock(el, result) {
+    const heading = el.querySelector('h1,h2,h3,h4,h5,.component-header__title,[class*="title"],[class*="tit"]:not(script)');
+    let title = heading ? (heading.innerText || heading.textContent || '').trim().split('\n')[0].trim() : null;
+    if (title && title.length > 100) title = title.substring(0, 100);
+    // Skip invisible blocks
+    if (el.offsetHeight < 30) return;
+    // Get clean text
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll('script,style,noscript,button,svg,.blind,.sr-only,[aria-hidden="true"]').forEach(function(s) { s.remove(); });
+    let text = (clone.innerText || clone.textContent || '').trim().replace(/\s+/g, ' ');
+    if (text.length > 300) text = text.substring(0, 300);
+    // Get images in this block
+    const imgs = [];
+    el.querySelectorAll('img').forEach(function(img) {
+      const src = img.src || img.dataset.src || '';
+      if (!src) return;
+      const path = src.replace(/https?:\/\/[^/]+/, '').split('?')[0];
+      imgs.push({ path: path, alt: img.getAttribute('alt') || null, w: img.naturalWidth || 0, h: img.naturalHeight || 0 });
+    });
+    result.blocks.push({
+      title: title,
+      text: text.substring(0, 200),
+      imageCount: imgs.length,
+      hasVideo: el.querySelectorAll('video, [class*="video"]').length > 0,
+      className: (el.className || '').toString().substring(0, 80)
+    });
+    imgs.forEach(function(img) { result.images.push(img); });
+    result.totalText += ' ' + text;
   }
 
   function auditScripts() {

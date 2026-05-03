@@ -223,7 +223,7 @@ function runAudit(){
 }
 
 function clearAuditTabs(){
-  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes','deepRes','imagesRes','trackingRes'].forEach(id=>{
+  ['auditSummary','auditOverview','seoRes','jsonldRes','sectionsRes','mediaRes','deepRes','imagesRes','trackingRes','uspRes'].forEach(id=>{
     const el=$(id);if(el)el.innerHTML=id.endsWith('Res')?'<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div>':'';
   });
   $('exportBar').style.display='none';
@@ -264,6 +264,7 @@ function renderFullAudit(a,t){
   renderSectionsTab(a.sections,t.sections,sec);
   renderMediaTab(a.media,t.media,med);
   renderDeepDiff(a,t);
+  renderUSPDiff(a.usp||{found:false},t.usp||{found:false});
   renderImagesDiff(a.images||[],t.images||[]);
   renderTrackingDiff(a.tracking||{},t.tracking||{},a.scripts||[],t.scripts||[]);
   toast('감사 완료 — Critical '+crit+'건');
@@ -731,6 +732,110 @@ function renderScriptsSection(aScr,tScr){
   html+=`<div style="font-size:10px;color:var(--muted)">AS-IS <b>${a1p.length}</b>개 / TO-BE <b>${t1p.length}</b>개</div></div>`;
 
   return html;
+}
+
+// ═══════════════════════ USP Diff ═══════════════════════
+function renderUSPDiff(a,t){
+  let html='';
+
+  // Stats comparison
+  const aS=a.stats||{},tS=t.stats||{};
+  html+='<div class="audit-section"><div class="audit-section-title">USP 영역 요약</div>';
+  html+=`<div style="font-size:10px;color:var(--muted);margin-bottom:8px">AS-IS: ${a.found?'✓ 감지':'✗ 미감지'} | TO-BE: ${t.found?'✓ 감지':'✗ 미감지'}</div>`;
+
+  if(a.found||t.found){
+    html+='<div class="usp-stat-grid">';
+    [['블록 수','blockCount'],['이미지 수','imageCount'],['텍스트 길이','totalTextLength']].forEach(([lbl,key])=>{
+      html+=`<div class="usp-stat"><div class="num"><span style="color:var(--asis)">${aS[key]||0}</span> / <span style="color:var(--tobe)">${tS[key]||0}</span></div><div class="lbl">${lbl}</div></div>`;
+    });
+    html+='</div>';
+  }
+  html+='</div>';
+
+  // Block-by-block comparison
+  const aBlocks=a.blocks||[],tBlocks=t.blocks||[];
+  if(aBlocks.length||tBlocks.length){
+    // Match blocks by title
+    const aMap=new Map();aBlocks.forEach(b=>{if(b.title)aMap.set(b.title.toLowerCase(),b);});
+    const tMap=new Map();tBlocks.forEach(b=>{if(b.title)tMap.set(b.title.toLowerCase(),b);});
+    const allKeys=[...new Set([...aMap.keys(),...tMap.keys()])];
+
+    // Matrix
+    html+='<div class="audit-section"><div class="audit-section-title">USP 블록 매핑 ('+allKeys.length+'개)</div>';
+    html+='<div class="matrix-row header"><div>블록</div><div>AS-IS</div><div>TO-BE</div></div>';
+    allKeys.forEach(k=>{
+      const aH=aMap.has(k),tH=tMap.has(k);
+      const title=aMap.get(k)?.title||tMap.get(k)?.title||k;
+      html+=`<div class="matrix-row">
+        <div class="matrix-label" title="${esc(title)}">${esc(title)}</div>
+        <div class="matrix-cell ${aH?'matrix-yes':'matrix-no'}">${aH?'✓':'✗'}</div>
+        <div class="matrix-cell ${tH?'matrix-yes':'matrix-no'}">${tH?'✓':'✗'}</div>
+      </div>`;
+    });
+    html+='</div>';
+
+    // Missing in TO-BE
+    const tMissing=allKeys.filter(k=>aMap.has(k)&&!tMap.has(k));
+    if(tMissing.length){
+      html+=`<div class="audit-section"><div class="audit-section-title" style="color:var(--danger)">TO-BE 누락 USP 블록 (${tMissing.length})</div>`;
+      tMissing.forEach(k=>{
+        const b=aMap.get(k);
+        html+=`<div class="usp-block" style="border-color:color-mix(in srgb,var(--danger) 40%,transparent)">
+          <div class="usp-block-title" style="color:var(--danger)">${esc(b.title)}</div>
+          <div class="usp-block-text">${esc(b.text)}</div>
+          <div class="usp-block-meta"><span>이미지 ${b.imageCount}장</span>${b.hasVideo?'<span>동영상 ✓</span>':''}</div>
+        </div>`;
+      });
+      html+='</div>';
+    }
+
+    // Matched blocks with text diff
+    const matched=allKeys.filter(k=>aMap.has(k)&&tMap.has(k));
+    if(matched.length){
+      html+=`<div class="audit-section"><div class="audit-section-title">공통 USP 블록 비교 (${matched.length})</div>`;
+      matched.forEach(k=>{
+        const ab=aMap.get(k),tb=tMap.get(k);
+        const textMatch=ab.text===tb.text;
+        const imgMatch=ab.imageCount===tb.imageCount;
+        html+=`<div class="usp-block">
+          <div class="usp-block-title">${esc(ab.title)} ${textMatch&&imgMatch?'<span style="color:var(--ok)">✓ 일치</span>':''}</div>
+          ${!textMatch?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:4px 0">
+            <div class="audit-val asis-v">${esc(ab.text.substring(0,120))}</div>
+            <div class="audit-val tobe-v">${esc(tb.text.substring(0,120))}</div>
+          </div>`:''}
+          <div class="usp-block-meta">
+            <span>이미지: <span style="color:var(--asis)">${ab.imageCount}</span>/${imgMatch?'':' '}<span style="color:var(--tobe)">${tb.imageCount}</span></span>
+            ${ab.hasVideo!==tb.hasVideo?'<span style="color:var(--warn)">동영상 불일치</span>':''}
+          </div>
+        </div>`;
+      });
+      html+='</div>';
+    }
+  }
+
+  // Image src diff within USP
+  const aImgs=new Set((a.images||[]).map(i=>i.path));
+  const tImgs=new Set((t.images||[]).map(i=>i.path));
+  const imgOnlyA=[...aImgs].filter(p=>!tImgs.has(p));
+  const imgOnlyT=[...tImgs].filter(p=>!aImgs.has(p));
+  if(imgOnlyA.length||imgOnlyT.length){
+    html+=`<div class="audit-section"><div class="audit-section-title">USP 이미지 차이</div>`;
+    html+=`<div style="font-size:9px;color:var(--muted);margin-bottom:6px">공통 ${[...aImgs].filter(p=>tImgs.has(p)).length} | <span style="color:var(--danger)">AS-IS only ${imgOnlyA.length}</span> | <span style="color:var(--ok)">TO-BE only ${imgOnlyT.length}</span></div>`;
+    if(imgOnlyA.length){
+      html+='<div style="margin-bottom:6px">';
+      imgOnlyA.slice(0,20).forEach(p=>{html+=`<div class="img-item img-only-a">${esc(p.length>70?'…'+p.slice(-67):p)}</div>`;});
+      if(imgOnlyA.length>20) html+=`<div style="font-size:9px;color:var(--muted);padding:2px 6px">+${imgOnlyA.length-20}개</div>`;
+      html+='</div>';
+    }
+    if(imgOnlyT.length){
+      imgOnlyT.slice(0,20).forEach(p=>{html+=`<div class="img-item img-only-t">${esc(p.length>70?'…'+p.slice(-67):p)}</div>`;});
+      if(imgOnlyT.length>20) html+=`<div style="font-size:9px;color:var(--muted);padding:2px 6px">+${imgOnlyT.length-20}개</div>`;
+    }
+    html+='</div>';
+  }
+
+  if(!a.found&&!t.found) html='<div style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">USP 영역을 찾을 수 없습니다</div>';
+  $('uspRes').innerHTML=html;
 }
 
 // ═══════════════════════ Deep Diff (2차) ═══════════════════════

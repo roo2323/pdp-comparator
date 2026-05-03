@@ -141,6 +141,20 @@ body{display:flex;flex-direction:column;}
 .script-flags{display:flex;gap:3px;flex-shrink:0;}
 .script-flag{font-size:8px;padding:1px 4px;border-radius:2px;background:var(--surface2);color:var(--muted);}
 
+/* USP diff */
+.usp-block{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:6px;font-size:10px;}
+.usp-block-title{font-weight:700;color:var(--text);margin-bottom:3px;}
+.usp-block-text{color:var(--muted);line-height:1.4;margin-bottom:3px;}
+.usp-block-meta{display:flex;gap:8px;font-size:9px;color:var(--muted);}
+.usp-stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;}
+.usp-stat{text-align:center;padding:10px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);}
+.usp-stat .num{font-size:18px;font-weight:700;}
+.usp-stat .lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+.usp-stat.asis-s{border-color:color-mix(in srgb,var(--asis) 30%,transparent);}
+.usp-stat.asis-s .num{color:var(--asis);}
+.usp-stat.tobe-s{border-color:color-mix(in srgb,var(--tobe) 30%,transparent);}
+.usp-stat.tobe-s .num{color:var(--tobe);}
+
 /* Word diff */
 .wdiff{font-size:10px;line-height:1.6;padding:8px;background:var(--surface2);border-radius:6px;border:1px solid var(--border);margin-bottom:6px;word-break:break-all;max-height:150px;overflow-y:auto;}
 .wdiff-add{background:rgba(52,211,153,.2);color:var(--ok);padding:0 2px;border-radius:2px;}
@@ -251,6 +265,7 @@ body{display:flex;flex-direction:column;}
       <div class="ptab" data-tab="media">미디어</div>
       <div class="ptab" data-tab="images">이미지</div>
       <div class="ptab" data-tab="tracking">트래킹</div>
+      <div class="ptab" data-tab="usp">USP</div>
       <div class="ptab" data-tab="deep">Deep Diff</div>
       <div class="ptab" data-tab="diff">DOM</div>
       <div class="ptab" data-tab="perf">성능</div>
@@ -280,6 +295,8 @@ body{display:flex;flex-direction:column;}
     <div class="pbody" id="tab-images"><div id="imagesRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- 트래킹 -->
     <div class="pbody" id="tab-tracking"><div id="trackingRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
+    <!-- USP -->
+    <div class="pbody" id="tab-usp"><div id="uspRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- Deep Diff -->
     <div class="pbody" id="tab-deep"><div id="deepRes" style="color:var(--muted);font-size:11px;text-align:center;padding:20px 0">감사 실행 후 결과가 표시됩니다</div></div>
     <!-- DOM 비교 (existing) -->
