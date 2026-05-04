@@ -229,6 +229,10 @@ body{display:flex;flex-direction:column;}
 <div id="hdr">
   <span id="logo">&#x2B21; PDP Comparator</span><div class="sep"></div>
   <input id="modelInput" type="text" placeholder="모델 ID (예: MD10521846)">
+  <select id="envSelect" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:11px;">
+    <option value="DEV">DEV</option>
+    <option value="STG">STG</option>
+  </select>
   <select id="pdpTypeSelect" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:11px;">
     <option value="PURCHASE">일시불</option>
     <option value="SUBSCRIPTION">구독</option>

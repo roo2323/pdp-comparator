@@ -74,6 +74,7 @@ function init(){
   $('asisUrl').value=localStorage.getItem('pdp-au')||'';
   $('tobeUrl').value=localStorage.getItem('pdp-tu')||'';
   $('modelInput').value=localStorage.getItem('pdp-m')||'';
+  $('envSelect').value=localStorage.getItem('pdp-env')||'DEV';
   $('pdpTypeSelect').value=localStorage.getItem('pdp-type')||'PURCHASE';
   refreshSel();bind();
   if(!localStorage.getItem('pdp-mobile-init')){localStorage.setItem('pdp-mobile-init','1');toggleMobile(true);}
@@ -98,6 +99,7 @@ function bind(){
   window.addEventListener('message',onMsg);
   $('asisUrl').onchange=()=>localStorage.setItem('pdp-au',$('asisUrl').value);
   $('tobeUrl').onchange=()=>localStorage.setItem('pdp-tu',$('tobeUrl').value);
+  $('envSelect').onchange=()=>{localStorage.setItem('pdp-env',$('envSelect').value);};
   $('pdpTypeSelect').onchange=()=>{localStorage.setItem('pdp-type',$('pdpTypeSelect').value);refreshSel();};
   $('exportJSON').onclick=()=>exportData('json');
   $('exportCSV').onclick=()=>exportData('csv');
@@ -105,8 +107,12 @@ function bind(){
   initDiv();
 }
 
-const BASE='https://wwwdev50.lge.co.kr';
-const API_BASE='http://pdpapisvc.lgekrdev.lge.co.kr';
+const ENV_CONFIG={
+  DEV:{base:'https://wwwdev50.lge.co.kr',api:'http://pdpapisvc.lgekrdev.lge.co.kr'},
+  STG:{base:'https://wwwstg.lge.co.kr',api:'http://pdpapisvc.lgekrstg.lge.co.kr'},
+};
+function getEnv(){return ENV_CONFIG[$('envSelect').value]||ENV_CONFIG.DEV;}
+
 
 // API fetch via XHR (extension pages bypass CORS for XHR with host_permissions)
 function fetchApi(url){
@@ -139,22 +145,23 @@ function load(){
   $('perfSt').textContent='페이지 로드 완료 후 자동 측정됩니다';$('perfRes').innerHTML='';
   clearAuditTabs();
   toast('URL 조회 중...');
-  const apiUrl=API_BASE+'/api/v1/models/'+m+'?pageType='+pdpType;
+  const env=getEnv();
+  const apiUrl=env.api+'/api/v1/models/'+m+'?pageType='+pdpType;
   fetchApi(apiUrl).then(d=>{
     if(!d||!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
     let asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
     if(pdpType==='SUBSCRIPTION') asisPath+='?dpType=careTab';
-    const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
-    $('asisUrl').value=BASE+asisPath;$('tobeUrl').value=tobeUrl;
+    const tobeUrl=pdpType==='SUBSCRIPTION'?env.base+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':env.base+'/model?modelId='+m;
+    $('asisUrl').value=env.base+asisPath;$('tobeUrl').value=tobeUrl;
     $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
     fs('asis','loading');fs('tobe','loading');
-    $('asisF').src=BASE+asisPath;$('tobeF').src=tobeUrl;
+    $('asisF').src=env.base+asisPath;$('tobeF').src=tobeUrl;
     toast('URL 자동 설정 완료');
   }).catch(e=>{console.error('[PDP] API fail:',e);toast('API 오류 — 폴백 모드');loadFallback(m,pdpType);});
 }
 function loadFallback(m,pdpType){
-  // API 없이 URL 패턴으로 직접 생성
-  const tobeUrl=pdpType==='SUBSCRIPTION'?BASE+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':BASE+'/model?modelId='+m;
+  const env=getEnv();
+  const tobeUrl=pdpType==='SUBSCRIPTION'?env.base+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':env.base+'/model?modelId='+m;
   $('asisUrl').value='';$('tobeUrl').value=tobeUrl;
   $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
   fs('tobe','loading');$('tobeF').src=tobeUrl;
