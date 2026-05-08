@@ -99,6 +99,10 @@ function bind(){
   window.addEventListener('message',onMsg);
   $('asisUrl').onchange=()=>localStorage.setItem('pdp-au',$('asisUrl').value);
   $('tobeUrl').onchange=()=>localStorage.setItem('pdp-tu',$('tobeUrl').value);
+  $('asisGoBtn').onclick=()=>goUrl('asis');
+  $('tobeGoBtn').onclick=()=>goUrl('tobe');
+  $('asisUrl').onkeydown=e=>{if(e.key==='Enter')goUrl('asis');};
+  $('tobeUrl').onkeydown=e=>{if(e.key==='Enter')goUrl('tobe');};
   $('envSelect').onchange=()=>{localStorage.setItem('pdp-env',$('envSelect').value);};
   $('pdpTypeSelect').onchange=()=>{localStorage.setItem('pdp-type',$('pdpTypeSelect').value);refreshSel();};
   $('exportJSON').onclick=()=>exportData('json');
@@ -114,22 +118,20 @@ const ENV_CONFIG={
 function getEnv(){return ENV_CONFIG[$('envSelect').value]||ENV_CONFIG.DEV;}
 
 
-// API fetch via XHR (extension pages bypass CORS for XHR with host_permissions)
+// API fetch via background.js proxy (bypasses CORS/mixed-content restrictions)
 function fetchApi(url){
   return new Promise((resolve,reject)=>{
-    const xhr=new XMLHttpRequest();
-    xhr.open('GET',url,true);
-    xhr.onload=function(){
-      try{
-        const json=JSON.parse(xhr.responseText);
-        console.log('[PDP] API ok, categoryUrlPath:', json?.data?.category?.categoryUrlPath);
-        resolve(json.data||null);
-      }catch(e){reject(e);}
-    };
-    xhr.onerror=function(){reject(new Error('XHR failed: '+xhr.status));};
-    xhr.ontimeout=function(){reject(new Error('XHR timeout'));};
-    xhr.timeout=10000;
-    xhr.send();
+    console.log('[PDP] fetchApi via proxy:', url);
+    chrome.runtime.sendMessage({type:'API_PROXY',url,reqId:Date.now()},resp=>{
+      if(chrome.runtime.lastError){
+        console.error('[PDP] proxy error:', chrome.runtime.lastError.message);
+        reject(new Error(chrome.runtime.lastError.message));
+        return;
+      }
+      if(!resp||!resp.ok){reject(new Error(resp?.error||'proxy failed'));return;}
+      console.log('[PDP] API ok via proxy, categoryUrlPath:', resp.data?.data?.category?.categoryUrlPath);
+      resolve(resp.data?.data||null);
+    });
   });
 }
 
@@ -146,11 +148,12 @@ function load(){
   clearAuditTabs();
   toast('URL 조회 중...');
   const env=getEnv();
-  const apiUrl=env.api+'/api/v1/models/'+m+'?pageType='+pdpType;
+  const apiUrl=env.api+'/api/v1/models/'+m+'/purchase-type';
   fetchApi(apiUrl).then(d=>{
-    if(!d||!d.category?.categoryUrlPath||!d.modelInfo?.modelName){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
-    let asisPath=d.category.categoryUrlPath+'/'+d.modelInfo.modelName.toLowerCase();
-    if(pdpType==='SUBSCRIPTION') asisPath+='?dpType=careTab';
+    if(!d){toast('API 응답 부족 — 폴백 모드');loadFallback(m,pdpType);return;}
+    const info=pdpType==='SUBSCRIPTION'?d.subscription:d.purchase;
+    if(!info||!info.url){toast('해당 판매유형 정보 없음 — 폴백 모드');loadFallback(m,pdpType);return;}
+    const asisPath=info.url;
     const tobeUrl=pdpType==='SUBSCRIPTION'?env.base+'/model?modelId='+m+'&pdpType=SUBSCRIPTION':env.base+'/model?modelId='+m;
     $('asisUrl').value=env.base+asisPath;$('tobeUrl').value=tobeUrl;
     $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
@@ -166,6 +169,16 @@ function loadFallback(m,pdpType){
   $('asisT').textContent=m+' (JSP)';$('tobeT').textContent=m+' (Next.js)';
   fs('tobe','loading');$('tobeF').src=tobeUrl;
   toast('TO-BE만 로드 (AS-IS URL은 직접 입력 필요)');
+}
+function goUrl(role){
+  const url=$(role+'Url').value.trim();
+  if(!url){toast(role==='asis'?'AS-IS':'TO-BE'+' URL을 입력해주세요');return;}
+  localStorage.setItem(role==='asis'?'pdp-au':'pdp-tu',url);
+  if(role==='asis')aR=false;else tR=false;
+  fs(role,'loading');
+  $(role+'F').src=url;
+  $(role==='asis'?'asisT':'tobeT').textContent=(role==='asis'?'AS-IS':'TO-BE')+' (직접 입력)';
+  toast((role==='asis'?'AS-IS':'TO-BE')+' 로드 시작');
 }
 function fs(s,st){const d=$(s+'D'),t=$(s+'St'),o=$(s+'Ov');d.className='dot '+st;t.textContent=st==='loading'?'로딩 중...':st==='ready'?'준비됨':'오류';o.classList.toggle('show',st==='loading');}
 function fl(s){
