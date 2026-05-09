@@ -20,19 +20,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       fetch(msg.url)
         .then(r => r.json())
         .then(data => {
-          console.log('[PDP-BG] API success, categoryUrlPath:', data?.data?.category?.categoryUrlPath);
-          // Send result back via both sendResponse AND tabs message (belt-and-suspenders)
+          console.log('[PDP-BG] API success');
           sendResponse({ ok: true, data });
-          if (sender.tab?.id) {
-            chrome.tabs.sendMessage(sender.tab.id, { type: 'API_PROXY_RESULT', ok: true, data, reqId });
-          }
         })
         .catch(e => {
           console.error('[PDP-BG] API error:', e.message);
           sendResponse({ ok: false, error: e.message });
-          if (sender.tab?.id) {
-            chrome.tabs.sendMessage(sender.tab.id, { type: 'API_PROXY_RESULT', ok: false, error: e.message, reqId });
-          }
         });
       return true;
     }
